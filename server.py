@@ -942,7 +942,7 @@ class Handler(BaseHTTPRequestHandler):
 
 # ── 啟動 ─────────────────────────────────────────────────────────────────
 
-def seed_if_empty(path: str) -> int:
+def seed_if_empty(path: str, zero_votes: bool = False) -> int:
     with connect() as conn:
         if conn.execute("SELECT COUNT(*) FROM wishes").fetchone()[0]:
             return 0
@@ -974,7 +974,11 @@ def seed_if_empty(path: str) -> int:
             except sqlite3.IntegrityError:
                 continue
             # 種子的票數用假的 ip_hash 灌,才不會影響真人的一人一票。
-            for i in range(max(0, int(item.get("votes", 0)))):
+            # zero_votes:對外的池子應該用這個 —— 示範用的票數會直接參加聯署,
+            # 讓虛構的願望贏走第一輪,那是假的。0 票進場、低於門檻,沒有真人
+            # 附議就不可能得標。
+            wanted = 0 if zero_votes else max(0, int(item.get("votes", 0)))
+            for i in range(wanted):
                 conn.execute("INSERT OR IGNORE INTO votes(wish_id,ip_hash,ts) VALUES(?,?,?)",
                              (cur.lastrowid, "seed-%d" % i, int(time.time())))
             conn.execute("UPDATE wishes SET votes=(SELECT COUNT(*) FROM votes "
@@ -990,6 +994,8 @@ def main(argv=None):
     ap.add_argument("--db", default=os.environ.get("WISHPOOL_DB",
                                                    os.path.join(ROOT, "data", "wishes.db")))
     ap.add_argument("--seed", action="store_true", help="DB 為空時載入 data/seed.json")
+    ap.add_argument("--seed-zero-votes", action="store_true",
+                    help="種子願望一律 0 票進場(對外的池子請用這個,示範票數會污染聯署)")
     ap.add_argument("--seed-file", default=os.path.join(ROOT, "data", "seed.json"))
     ap.add_argument("--cycle-days", type=float,
                     default=float(os.environ.get("WISHPOOL_CYCLE_DAYS",
@@ -1018,9 +1024,10 @@ def main(argv=None):
 
     init_db()
     if args.seed:
-        added = seed_if_empty(args.seed_file)
+        added = seed_if_empty(args.seed_file, zero_votes=args.seed_zero_votes)
         if added:
-            sys.stderr.write("[info] 載入 %d 筆種子願望\n" % added)
+            sys.stderr.write("[info] 載入 %d 筆種子願望%s\n"
+                             % (added, "(0 票)" if args.seed_zero_votes else ""))
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.daemon_threads = True

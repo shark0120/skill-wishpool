@@ -1,4 +1,4 @@
-# Skill 許願池
+﻿# Skill 許願池
 
 > 你想要什麼 AI skill?丟一個願望進池子,大家聯署。**每三天結算一次,票最高的那一個就做成 skill。**
 
@@ -136,7 +136,7 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 ## 測試
 
 ```bash
-python3 scripts/selftest.py                 # 89 項端到端檢查(真的起伺服器、真的打 HTTP)
+python3 scripts/selftest.py                 # 90 項端到端檢查(真的起伺服器、真的打 HTTP)
 python3 scripts/selftest.py --verify-gauge  # 反向對照:把防護拆掉,確認測試會紅
 python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實算 WCAG 對比度
 ```

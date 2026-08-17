@@ -415,8 +415,13 @@ def suite_rate_limit_race(c, src_root):
 
 
 def suite_rounds(c, src_root):
-    """聯署輪次:3 秒一輪,驗證票最高的真的出線、狀態轉成 planned。"""
-    env = {"WISHPOOL_ADMIN_TOKEN": TOKEN, "WISHPOOL_CYCLE_SECONDS": 3,
+    """聯署輪次:6 秒一輪,驗證票最高的真的出線、狀態轉成 planned。
+
+    這一節刻意寫成「先確認票真的進去了」+「輪詢等結算」而不是 sleep 固定秒數。
+    原本用 time.sleep(3.5) 的版本會偶發性失敗(三次重跑才紅一次)—— 會閃的測試
+    跟假綠燈一樣糟:CI 隨機變紅之後,大家就開始忽略紅燈。
+    """
+    env = {"WISHPOOL_ADMIN_TOKEN": TOKEN, "WISHPOOL_CYCLE_SECONDS": 6,
            "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
            "WISHPOOL_TRUST_PROXY": 1}
     with Server(src_root, env, label="rounds") as srv:
@@ -427,8 +432,14 @@ def suite_rounds(c, src_root):
         _, data, _ = req(p, "POST", "/api/wishes", {"title": "輪次測試:應該要出線的願望"},
                          headers={"X-Forwarded-For": "198.51.100.2"})
         high = data["wish"]["id"]
+        votes = []
         for ip in ("198.51.100.3", "198.51.100.4"):
-            req(p, "POST", "/api/wishes/%d/vote" % high, headers={"X-Forwarded-For": ip})
+            status, vd, _ = req(p, "POST", "/api/wishes/%d/vote" % high,
+                                headers={"X-Forwarded-For": ip})
+            votes.append((status, (vd or {}).get("votes")))
+        # 票沒進去的話,得標者就會變成另一個人 —— 先在這裡擋下來,
+        # 不要讓它變成下游一個看不懂的失敗。
+        c.eq("兩張外部票都投進去了", votes, [(200, 2), (200, 3)])
 
         _, data, _ = req(p, "GET", "/api/round")
         rnd = data["round"]
@@ -436,25 +447,35 @@ def suite_rounds(c, src_root):
         c.eq("領先者是票多的那個", (rnd.get("leader") or {}).get("id"), high)
         c.ok("有倒數秒數", isinstance(rnd.get("seconds_left"), int))
 
-        time.sleep(3.5)  # 等這一輪過期
-        _, data, _ = req(p, "GET", "/api/round")
-        rnd = data["round"]
-        c.ok("過期後進到第 2 輪", rnd.get("index") >= 2, "index=%s" % rnd.get("index"))
-        history = rnd.get("history") or []
-        c.ok("歷屆有第 1 輪紀錄", any(h["index"] == 1 for h in history), repr(history)[:200])
-        first = next((h for h in history if h["index"] == 1), {})
+        # 輪詢等結算(最多 20 秒),而不是賭一個 sleep 剛好落在正確的位置
+        deadline = time.time() + 20
+        first, rnd = {}, {}
+        while time.time() < deadline:
+            _, data, _ = req(p, "GET", "/api/round")
+            rnd = data["round"]
+            first = next((h for h in (rnd.get("history") or []) if h["index"] == 1), {})
+            if first.get("winner_id") is not None:
+                break
+            time.sleep(0.5)
+        c.ok("第 1 輪在時限內結算了", bool(first), "round=%s" % repr(rnd)[:300])
+        c.ok("過期後至少進到第 2 輪", (rnd.get("index") or 0) >= 2, "index=%s" % rnd.get("index"))
         c.eq("第 1 輪得標者是票最多的", first.get("winner_id"), high)
         c.eq("得標票數記錄正確", first.get("votes"), 3)
 
         _, data, _ = req(p, "GET", "/api/wishes/%d" % high)
         c.eq("得標願望狀態轉成 planned", data["wish"]["status"], "planned")
-        c.ok("得標願望自動寫了備註", "聯署第一名" in data["wish"]["note"],
+        c.ok("得標願望自動寫了備註", "聯署第一名" in (data["wish"]["note"] or ""),
              repr(data["wish"]["note"]))
 
         _, data, _ = req(p, "GET", "/api/round")
-        c.eq("下一輪換第二名領先", (data["round"].get("leader") or {}).get("id"), low)
+        leader = (data["round"].get("leader") or {}).get("id")
+        # 第二名可能已經被下一輪收走(輪次只有 6 秒),所以兩種結果都算對:
+        # 還在候選 → 它就是領先者;已經出線 → 狀態是 planned。
+        _, low_data, _ = req(p, "GET", "/api/wishes/%d" % low)
+        c.ok("下一輪換第二名(領先或已出線)",
+             leader == low or low_data["wish"]["status"] == "planned",
+             "leader=%s low.status=%s" % (leader, low_data["wish"]["status"]))
 
-        # 管理端提前結算
         status, data, _ = req(p, "POST", "/api/admin/round/close",
                               headers={"X-Admin-Token": TOKEN})
         c.eq("管理端可以提前結算", status, 200)
