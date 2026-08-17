@@ -140,7 +140,7 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 ## 測試
 
 ```bash
-python3 scripts/selftest.py                 # 94 項端到端檢查(真的起伺服器、真的打 HTTP)
+python3 scripts/selftest.py                 # 97 項端到端檢查(真的起伺服器、真的打 HTTP)
 python3 scripts/selftest.py --verify-gauge  # 反向對照:把防護拆掉,確認測試會紅
 python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實算 WCAG 對比度
 ```
@@ -148,7 +148,12 @@ python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實
 `--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、速率限制的寫入鎖、輪次得標判定**這六個防護改壞,然後要求同一套測試**必須失敗**。
 一套永遠會綠的測試比沒有測試更危險 —— 這一步就是在防那個。
 
-開發過程中這套機制真的抓到三件事:
+**測試一定要在你要部署的那台機器上跑一次。** 這個專案就吃過一次:同一份程式碼在
+Windows / Python 3.14 上 94 項全綠,在 Ubuntu / Python 3.10 上穩定紅 4 項 —— 而紅的
+那個是真 bug(見下面第三點)。`deploy/README.md` 的更新流程因此把 selftest 放在
+`systemctl restart` **之前**。
+
+開發過程中這套機制真的抓到四件事:
 
 > **假綠燈:** 目錄逃脫測試原本用 `urllib` 發 `/../x`,但 `urllib` 會先把路徑正規化成
 > `/x`,所以那條測試從來沒送出過 `..` —— 把逃脫檢查整段拆掉,測試照樣全綠。現在改用
@@ -159,9 +164,15 @@ python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實
 > **全部**拿到 201。現在檢查與寫入在同一個 `BEGIN IMMEDIATE` 交易裡,並加了一條
 > 並行測試盯著它。
 >
-> **會閃的測試:** 輪次測試原本 sleep 固定秒數,大約每三次紅一次。會閃的測試跟假綠燈
-> 一樣糟 —— CI 隨機變紅之後,大家就開始忽略紅燈。現在改成先確認票真的投進去了,
-> 再輪詢等結算。
+> **真 bug(而且我一度把它當成測試的錯):** handler 原本在 `with connect()` **裡面**
+> 就送出 HTTP 回應,而 commit 是離開區塊才發生 —— 客戶端拿到 201 之後立刻發的下一個
+> 請求,可能用另一條連線讀到還沒有這筆資料的舊快照。症狀就是「剛許的願不見了」。
+> 我第一次看到它時以為只是輪次測試在閃,用輪詢「修」掉了,等到在 Linux 上跑才發現
+> 是真的。現在所有 handler 都是「payload 在 with 裡面組好,回應在提交之後才送」,
+> 並有一節 10 輪無延遲的寫完馬上讀盯著。
+>
+> **會閃的測試:** 輪次測試原本 sleep 固定秒數。會閃的測試跟假綠燈一樣糟 —— CI 隨機
+> 變紅之後,大家就開始忽略紅燈。現在改成先確認票真的投進去了,再輪詢等結算。
 
 ---
 
@@ -209,11 +220,14 @@ python3 server.py --seed     # http://127.0.0.1:8787
 - **Anti-abuse**: per-source rate limits in SQLite, one vote per source per wish enforced by
   a DB unique key, duplicate-title merging, input sanitisation, hash-based CSP, fail-closed
   admin endpoints. Raw IPs are never stored — only `sha256(salt + ip)`.
-- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (94 checks).
+- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (97 checks).
   `--verify-gauge` sabotages six guards and requires the suite to go red, so the suite
   can't quietly become a rubber stamp. It has already caught a false green (a traversal
-  test that never actually sent `..`, because `urllib` normalises the path), a real hole
+  test that never actually sent `..`, because `urllib` normalises the path), two real bugs
   (the rate limiter was check-then-act with no lock, so 20 parallel requests all got
-  through a limit of 5), and a flaky test (fixed-`sleep` round settlement).
+  through a limit of 5; and responses were sent before the transaction committed, so a
+  freshly created wish could be missing from the very next read), and a flaky test.
+  Run the suite **on the machine you deploy to** — the same code was 94/94 green on
+  Windows/Python 3.14 while failing 4 checks on Ubuntu/Python 3.10.
 
 See the tables above for the full API and configuration; MIT licensed.
