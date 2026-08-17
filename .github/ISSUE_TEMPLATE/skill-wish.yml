@@ -1,0 +1,58 @@
+name: 許一個 skill 願望
+description: 你想要什麼 AI skill?寫下來,每三天票最高的那一個會被做成 skill。
+title: "[許願] "
+labels: ["wish"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **有網頁版的池子就直接在網頁上許願**,比開 issue 快得多(不用註冊)。
+        這張表是給看不到網頁、或那個站關掉的時候用的。
+
+        寫得好的願望會被附議,寫得糊的沒人看得懂要做什麼。
+
+  - type: input
+    id: title
+    attributes:
+      label: 你想要什麼?一句話
+      description: 講你要解決的事,不要只講工具名稱。
+      placeholder: 把一疊發票 PDF 自動整理成報稅用的表格
+    validations:
+      required: true
+
+  - type: textarea
+    id: now
+    attributes:
+      label: 現在你怎麼做這件事?哪裡最煩?
+      placeholder: |
+        現在是一張一張打進 Excel,十幾份格式都不一樣,一季要花兩個晚上。
+        最煩的是稅額要自己對,常常對錯。
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: 做成什麼樣你會覺得成功?
+      description: 越具體越好 —— 這是驗收條件。
+      placeholder: |
+        丟一個資料夾進去,出來一份 CSV,含日期/對象/金額/稅額/發票號碼,
+        金額對不上的自己標紅。不用我開 Excel。
+    validations:
+      required: true
+
+  - type: input
+    id: tags
+    attributes:
+      label: 標籤(逗號分隔,最多 5 個)
+      placeholder: excel, 報稅, pdf, 自動化
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 送出前確認
+      options:
+        - label: 我搜過了,現有的願望裡沒有一樣的(有的話我會去附議而不是開新的)
+          required: true
+        - label: 這裡面沒有我的個資、密碼、金鑰,也沒有別人的個資
+          required: true

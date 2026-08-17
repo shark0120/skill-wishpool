@@ -1,0 +1,20 @@
+# 資料與祕密:絕對不要進版控
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/ip_salt
+*.env
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 編輯器與系統
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

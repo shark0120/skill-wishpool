@@ -1,0 +1,48 @@
+[Unit]
+Description=Skill 許願池
+Documentation=https://github.com/shark0120/skill-wishpool
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wishpool
+Group=wishpool
+WorkingDirectory=/opt/skill-wishpool
+
+# 只綁 127.0.0.1 —— 對外一律走反向代理。直接綁 0.0.0.0 的話,
+# WISHPOOL_TRUST_PROXY 就會變成任何人都能用 X-Forwarded-For 繞過速率限制。
+ExecStart=/usr/bin/python3 /opt/skill-wishpool/server.py \
+    --host 127.0.0.1 --port 8787 \
+    --db /var/lib/skill-wishpool/wishes.db \
+    --cycle-days 3
+
+# 權杖與其他設定放這裡,權限設 0600。前面的 "-" 表示檔案不存在也能啟動
+# (管理端會自己 fail-closed 回 503,不會變成誰都能改)。
+EnvironmentFile=-/etc/skill-wishpool.env
+
+Restart=on-failure
+RestartSec=3
+
+# ── 收緊權限 ──────────────────────────────────────────────────────────
+# 這個服務只需要:讀 /opt/skill-wishpool、寫 /var/lib/skill-wishpool、開一個 TCP port。
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/skill-wishpool
+
+[Install]
+WantedBy=multi-user.target

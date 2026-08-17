@@ -1,0 +1,194 @@
+{
+ "source": "seed",
+ "wishes": [
+  {
+   "id": 1,
+   "title": "把一疊發票 PDF 自動整理成報稅用的表格",
+   "detail": "每季要報稅,發票是十幾份格式都不一樣的 PDF。現在是一張一張打進 Excel。\n希望丟一個資料夾進去,出來一份含日期、對象、金額、稅額、發票號碼的表格,金額對不上的自己標紅。",
+   "tags": [
+    "excel",
+    "報稅",
+    "pdf",
+    "自動化"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 18,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 2,
+   "title": "會議錄音直接變成待辦清單,誰負責什麼寫清楚",
+   "detail": "逐字稿沒用,我要的是「誰、要做什麼、什麼時候」。\n沒講清楚負責人的項目要標成待確認,不要自己編一個人名上去。",
+   "tags": [
+    "會議",
+    "語音",
+    "待辦"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 15,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 3,
+   "title": "檢查我的網站在手機上有沒有破版",
+   "detail": "我用平板,看不到自己網站在別人手機上長怎樣。\n希望能量橫向捲動、字級、對比、點擊目標大小,然後直接告訴我哪一行 CSS 要改。",
+   "tags": [
+    "網頁",
+    "手機",
+    "驗收"
+   ],
+   "author": "範例",
+   "status": "planned",
+   "votes": 12,
+   "skill_url": "",
+   "note": "範例資料:示範「有人接了」這個狀態長什麼樣",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 4,
+   "title": "追蹤購物網站價格,降到我設的價再通知我",
+   "detail": "同一件東西在三個平台都有,想追最低價。\n要能處理「特價其實是漲價後打折」這種假降價。",
+   "tags": [
+    "購物",
+    "爬蟲",
+    "通知"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 11,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 5,
+   "title": "讀完長 PDF 之後幫我出考題",
+   "detail": "準備考試用。要能出選擇題與問答題、附答案與出處頁數,而且不能編出原文沒寫的內容。",
+   "tags": [
+    "學習",
+    "pdf",
+    "考試"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 9,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 6,
+   "title": "把 Excel 報表變成一頁可以直接問問題的網頁",
+   "detail": "老闆不會開 Excel 篩選。想要一頁手機打得開的網頁,能搜尋、排序、看小圖表,不要外連 CDN。",
+   "tags": [
+    "excel",
+    "網頁",
+    "報表"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 8,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 7,
+   "title": "每天早上把我追的幾個來源整理成一封摘要",
+   "detail": "RSS、幾個論壇、兩個 YouTube 頻道。重複的事件要合併,標題殺人的要還原成實際發生了什麼。",
+   "tags": [
+    "新聞",
+    "摘要",
+    "排程"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 7,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 8,
+   "title": "把手機相簿裡的收據挑出來歸檔",
+   "detail": "相簿裡混著幾千張生活照跟收據截圖。希望能挑出收據、讀出金額日期、照月份歸檔,不要把私人照片傳出去。",
+   "tags": [
+    "相簿",
+    "收據",
+    "隱私"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 6,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 9,
+   "title": "追蹤幾個 GitHub 專案的更新,用中文講重點",
+   "detail": "只想知道「這次更新會不會影響我現在的用法」,不要把 changelog 翻譯一遍給我。",
+   "tags": [
+    "github",
+    "摘要",
+    "中文"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 5,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  {
+   "id": 10,
+   "title": "幫我看一份合約裡哪些條款對我不利",
+   "detail": "只要標出風險條款、翻成白話、告訴我通常會怎麼談,不要假裝是律師意見。",
+   "tags": [
+    "合約",
+    "白話",
+    "風險"
+   ],
+   "author": "範例",
+   "status": "open",
+   "votes": 4,
+   "skill_url": "",
+   "note": "",
+   "created_at": "2026-01-01T00:00:00Z",
+   "updated_at": "2026-01-01T00:00:00Z"
+  }
+ ],
+ "total": 10,
+ "stats": {
+  "wishes": 10,
+  "votes": 95,
+  "granted": 1
+ },
+ "round": {
+  "cycle_days": 3,
+  "min_votes": 1,
+  "index": null,
+  "started_at": null,
+  "ends_at": null,
+  "seconds_left": null,
+  "leader": null,
+  "history": []
+ },
+ "generated_at": "2026-08-17T13:47:14Z",
+ "note": "這是唯讀快照,由 scripts/export_static.py 產生,不要手改。來源:seed"
+}

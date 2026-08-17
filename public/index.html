@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Skill 許願池 — 你想要什麼 AI skill?丟一個願望進池子,大家聯署。每三天結算一次,票最高的那一個就做成 skill。不用註冊。">
+<title>Skill 許願池</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='none' stroke='%230A6C87' stroke-width='2.6' stroke-linecap='round' d='M4 11c4-3 8-3 12 0s8 3 12 0M4 18c4-3 8-3 12 0s8 3 12 0M4 25c4-3 8-3 12 0s8 3 12 0'/%3E%3C/svg%3E">
+<style>
+/* ══ 重置 ══════════════════════════════════════════════════════════════ */
+*{margin:0;padding:0;box-sizing:border-box}
+img,svg{max-width:100%}
+button,input,textarea{font:inherit;color:inherit}
+
+/* ══ 色票 ══════════════════════════════════════════════════════════════
+   對比度全部實測過(scripts/check_contrast.py 會在 CI 重驗)。
+   改任何顏色之後跑一次那支腳本,--faint 最容易掉到 4.5:1 以下 —— 開發時
+   就在「--faint 疊在 --bg2 上」這一組掉過一次(4.46:1)。            */
+:root{
+  --bg:#F2F7F9; --bg2:#E4EEF2; --card:#FFFFFF;
+  --ink:#0E2027; --soft:#33525E; --faint:#4F6B76;
+  --rule:#CFE0E7; --line-strong:#5F8794;
+  --accent:#0A6C87; --accent-ink:#FFFFFF; --focus:#0A6C87;
+  --good:#17654A; --warn:#8A4A12;
+  --pool1:rgba(10,108,135,.10); --pool2:rgba(10,108,135,.06);
+  --shadow:0 1px 2px rgba(14,32,39,.06),0 8px 24px rgba(14,32,39,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#08161C; --bg2:#0D2028; --card:#112832;
+    --ink:#DEEAEF; --soft:#A2BCC5; --faint:#82A0AB;
+    --rule:#1F3B47; --line-strong:#4E7D8C;
+    --accent:#63CFE6; --accent-ink:#04222B; --focus:#63CFE6;
+    --good:#63D6A4; --warn:#E0A76A;
+    --pool1:rgba(99,207,230,.10); --pool2:rgba(99,207,230,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme=light]{
+  --bg:#F2F7F9;--bg2:#E4EEF2;--card:#FFFFFF;--ink:#0E2027;--soft:#33525E;--faint:#4F6B76;
+  --rule:#CFE0E7;--line-strong:#5F8794;--accent:#0A6C87;--accent-ink:#FFFFFF;--focus:#0A6C87;
+  --good:#17654A;--warn:#8A4A12;--pool1:rgba(10,108,135,.10);--pool2:rgba(10,108,135,.06);
+  --shadow:0 1px 2px rgba(14,32,39,.06),0 8px 24px rgba(14,32,39,.05);
+}
+:root[data-theme=dark]{
+  --bg:#08161C;--bg2:#0D2028;--card:#112832;--ink:#DEEAEF;--soft:#A2BCC5;--faint:#82A0AB;
+  --rule:#1F3B47;--line-strong:#4E7D8C;--accent:#63CFE6;--accent-ink:#04222B;--focus:#63CFE6;
+  --good:#63D6A4;--warn:#E0A76A;--pool1:rgba(99,207,230,.10);--pool2:rgba(99,207,230,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+}
+
+/* ══ 版面 ══════════════════════════════════════════════════════════════ */
+body{
+  background:var(--bg); color:var(--ink); min-height:100dvh;
+  font-family:"PingFang TC","Heiti TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
+  font-size:16px; line-height:1.75; -webkit-text-size-adjust:100%;
+  padding:0 max(1rem,env(safe-area-inset-left)) calc(5.5rem + env(safe-area-inset-bottom));
+  overflow-x:hidden;
+}
+body::before{
+  content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(58rem 26rem at 50% -10rem, var(--pool1), transparent 70%),
+    radial-gradient(36rem 20rem at 8% 6rem, var(--pool2), transparent 70%);
+}
+.wrap{max-width:46rem;margin:0 auto}
+
+h1{font-size:clamp(1.75rem,6.5vw,2.5rem);line-height:1.2;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.05rem;line-height:1.4;font-weight:600;margin:0}
+p{color:var(--soft)}
+.meta{font-size:.82rem;color:var(--faint);line-height:1.6}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+header{padding:2rem 0 1rem;text-align:center}
+.tagline{margin:.55rem auto 0;max-width:32rem}
+.tagline b{color:var(--ink)}
+
+/* ══ 圖示 ══════════════════════════════════════════════════════════════
+   全部是同文件內嵌 SVG symbol,沒有 emoji、沒有圖檔、沒有字型圖示。
+   emoji 在每個平台長不一樣、在暗色模式常常糊掉,而且縮放不受控。      */
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.i{width:1.15em;height:1.15em;stroke:currentColor;fill:none;stroke-width:1.7;
+   stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;vertical-align:-.18em}
+.i.solid{fill:currentColor;stroke:none}
+.i.lg{width:2.1rem;height:2.1rem;stroke-width:1.4}
+
+/* ══ 水池動畫 ══════════════════════════════════════════════════════════
+   純 canvas,不載入任何素材。它是裝飾:aria-hidden、上面不放任何文字
+   (文字疊在動畫上就沒辦法保證對比度)。                              */
+.pool-wrap{margin:1.15rem 0 0;border:1px solid var(--rule);border-radius:.8rem;
+           overflow:hidden;background:var(--bg2);box-shadow:var(--shadow)}
+#pool{display:block;width:100%;height:clamp(92px,20vw,140px)}
+
+/* ══ 統計條 ════════════════════════════════════════════════════════════ */
+.stats{display:flex;gap:.5rem;justify-content:center;margin:1rem 0 0;flex-wrap:wrap}
+.stat{background:var(--card);border:1px solid var(--rule);border-radius:.6rem;
+      padding:.45rem .8rem;min-width:5.6rem;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:1.15rem;line-height:1.3;font-variant-numeric:tabular-nums}
+/* 12px 是輔助文字的地板,再小在平板上、戶外光線下就讀不到 */
+.stat span{font-size:.78rem;color:var(--faint)}
+
+/* ══ 通用控件 ══════════════════════════════════════════════════════════ */
+button,.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
+  min-height:44px;padding:.5rem 1rem;border:1px solid var(--rule);border-radius:.55rem;
+  background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;
+  transition:background .15s,border-color .15s,transform .1s;
+}
+button:hover,.btn:hover{background:var(--bg2)}
+button:active,.btn:active{transform:translateY(1px)}
+button[disabled]{opacity:.55;cursor:not-allowed}
+.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.primary:hover{background:var(--accent);filter:brightness(1.08)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:.4rem}
+a{color:var(--accent);text-underline-offset:.2em}
+
+.wish-cta{width:100%;margin:1.4rem 0 .2rem;font-size:1.05rem;min-height:52px}
+
+/* ══ 本輪聯署 ══════════════════════════════════════════════════════════ */
+.round{background:var(--card);border:1px solid var(--accent);border-radius:.8rem;
+       padding:.9rem 1rem;margin:1.4rem 0 0;box-shadow:var(--shadow)}
+.round[hidden]{display:none}
+.round-top{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.round-idx{font-weight:700;font-size:.95rem}
+.clock{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent);
+       font-size:1.05rem;margin-left:auto}
+.clock.soon{color:var(--warn)}
+.leader{display:flex;gap:.55rem;align-items:center;margin:.6rem 0 0;padding:.35rem .7rem;
+        background:var(--bg2);border-radius:.55rem;font-size:.92rem;flex-wrap:wrap}
+.leader .mark{flex:0 0 auto;color:var(--accent);display:flex;align-items:center}
+.leader .t{flex:1 1 10rem;min-width:0}
+/* 獨立連結一律撐到 44px:平板上是手指,不是滑鼠 */
+.leader a{font-weight:600;text-decoration:none;display:inline-flex;align-items:center;
+          min-height:44px}
+.leader a:hover{text-decoration:underline}
+.leader .n{color:var(--faint);font-size:.82rem;white-space:nowrap}
+.round-rule{font-size:.82rem;color:var(--faint);margin:.5rem 0 0}
+.history{margin:.6rem 0 0;border-top:1px solid var(--rule);padding-top:.3rem}
+.history summary{cursor:pointer;font-size:.88rem;font-weight:600;min-height:44px;
+                 display:flex;align-items:center;gap:.4rem}
+.history ol{list-style:none;margin:.2rem 0 0}
+.history li{display:flex;gap:.55rem;align-items:center;font-size:.88rem;
+            border-bottom:1px dashed var(--rule);flex-wrap:wrap}
+.history li:last-child{border-bottom:none}
+.history .r{color:var(--faint);font-size:.78rem;flex:0 0 auto;min-width:3.6rem}
+.history .t{flex:1 1 8rem;min-width:0;overflow-wrap:break-word}
+.history a{display:inline-flex;align-items:center;min-height:44px;gap:.3rem}
+
+/* ══ 許願表單 ══════════════════════════════════════════════════════════ */
+.compose{background:var(--card);border:1px solid var(--rule);border-radius:.8rem;
+         padding:1.1rem;margin:1rem 0 .4rem;box-shadow:var(--shadow)}
+.compose[hidden]{display:none}
+.field{margin:0 0 .9rem}
+.field label{display:block;font-size:.88rem;font-weight:600;margin:0 0 .3rem}
+.field .hint{font-size:.8rem;color:var(--faint);font-weight:400}
+input[type=text],textarea{
+  width:100%;background:var(--bg);border:1px solid var(--line-strong);border-radius:.5rem;
+  padding:.6rem .7rem;font-size:16px;line-height:1.6;min-height:44px;
+}
+textarea{min-height:6.5rem;resize:vertical}
+input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;border-color:var(--focus)}
+::placeholder{color:var(--faint);opacity:1}   /* 別用瀏覽器預設的半透明,對比不夠 */
+.count{float:right;font-size:.78rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.count.over{color:var(--warn);font-weight:600}
+.err{display:block;font-size:.82rem;color:var(--warn);margin:.3rem 0 0;font-weight:600}
+.err:empty{display:none}
+.row{display:flex;gap:.6rem;flex-wrap:wrap}
+.row>*{flex:1 1 10rem}
+.compose-actions{display:flex;gap:.6rem;margin:.2rem 0 0}
+.compose-actions .primary{flex:2 1 auto}
+.compose-actions .ghost{flex:1 1 auto}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+
+/* ══ 工具列 ════════════════════════════════════════════════════════════ */
+.toolbar{margin:1.6rem 0 .9rem}
+.search{position:relative;display:flex;align-items:center}
+.search input{padding-left:2.4rem}
+.search .mag{position:absolute;left:.75rem;color:var(--faint);pointer-events:none;
+             display:flex;align-items:center}
+.sorts{display:flex;gap:.4rem;margin:.7rem 0 0;flex-wrap:wrap}
+.sorts button{flex:1 1 auto;min-width:6rem;font-size:.92rem;padding:.45rem .7rem}
+.sorts button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);
+                                 border-color:var(--accent);font-weight:600}
+.tags-bar{display:flex;gap:.4rem;margin:.7rem 0 0;overflow-x:auto;padding-bottom:.2rem;
+          -webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.tags-bar button{min-height:44px;padding:.3rem .8rem;font-size:.85rem;white-space:nowrap;
+                 border-radius:1.4rem}
+.tags-bar button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);
+                                    border-color:var(--accent)}
+
+/* ══ 願望卡 ════════════════════════════════════════════════════════════ */
+.list{list-style:none;margin:.6rem 0 0}
+.wish{display:flex;gap:.85rem;background:var(--card);border:1px solid var(--rule);
+      border-radius:.8rem;padding:.95rem;margin:0 0 .75rem;box-shadow:var(--shadow)}
+.wish.flash{animation:flash 1.8s ease-out}
+@keyframes flash{0%{border-color:var(--accent);box-shadow:0 0 0 3px var(--pool1)}100%{}}
+.vote{display:flex;flex-direction:column;align-items:center;justify-content:center;
+      min-width:58px;min-height:62px;padding:.3rem;border-radius:.6rem;gap:.05rem;
+      background:var(--bg);flex:0 0 auto}
+.vote .n{font-size:1.05rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.vote .lbl{font-size:.78rem;color:var(--faint);line-height:1.2}
+.vote[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.vote[aria-pressed=true] .lbl{color:var(--accent-ink)}
+.wish-body{flex:1 1 auto;min-width:0}
+.wish-body h2{overflow-wrap:break-word}
+.detail{color:var(--soft);font-size:.94rem;margin:.35rem 0 0;white-space:pre-wrap;
+        overflow-wrap:break-word}
+.detail.clamped{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
+                overflow:hidden}
+.more{background:none;border:none;color:var(--accent);padding:.2rem 0;min-height:44px;
+      font-size:.86rem;font-weight:600;justify-content:flex-start}
+.more:hover{background:none;text-decoration:underline}
+.chips{display:flex;gap:.35rem;flex-wrap:wrap;margin:.5rem 0 0}
+/* 卡片上的標籤是**標示**不是按鈕:要篩選請用上面那排 44px 的標籤鈕。
+   把它們做成 26px 高的小按鈕會多出二十幾個手指按不到的目標。       */
+.chip{font-size:.78rem;background:var(--bg2);border:1px solid var(--rule);border-radius:1rem;
+      padding:.1rem .55rem;color:var(--soft);display:inline-flex;align-items:center}
+.badge{font-size:.78rem;font-weight:700;border-radius:1rem;padding:.1rem .55rem;
+       border:1px solid currentColor;display:inline-flex;align-items:center}
+.badge.granted{color:var(--good)}
+.badge.planned{color:var(--accent)}
+.badge.declined{color:var(--faint)}
+.wish-foot{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.5rem 0 0}
+.granted-link{font-size:.86rem;font-weight:600;display:inline-flex;align-items:center;
+              gap:.3rem;min-height:44px}
+
+/* ══ 狀態 ══════════════════════════════════════════════════════════════ */
+.notice{background:var(--bg2);border:1px solid var(--rule);border-left:3px solid var(--accent);
+        border-radius:.55rem;padding:.75rem .9rem;margin:1rem 0;font-size:.9rem;
+        color:var(--soft)}
+.notice b{color:var(--ink)}
+.empty{text-align:center;padding:2.4rem 1rem;color:var(--faint)}
+.empty .i{color:var(--faint);margin-bottom:.5rem}
+.skeleton{height:5.6rem;background:var(--card);border:1px solid var(--rule);
+          border-radius:.8rem;margin:0 0 .75rem;opacity:.6;animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.3}}
+
+#toast{position:fixed;left:50%;transform:translateX(-50%);
+       bottom:calc(1.2rem + env(safe-area-inset-bottom));z-index:20;
+       max-width:min(28rem,calc(100vw - 2rem));pointer-events:none}
+.toast{background:var(--ink);color:var(--bg);border-radius:.55rem;padding:.6rem .9rem;
+       margin:.4rem 0 0;font-size:.92rem;box-shadow:var(--shadow);text-align:center}
+/* 錯誤提示用 --bg 當文字色,亮暗兩邊才都夠對比(--warn 在暗色是亮橘,白字不夠)*/
+.toast.bad{background:var(--warn);color:var(--bg)}
+
+#theme{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));z-index:19;
+       min-width:44px;padding:.5rem;border-radius:50%;box-shadow:var(--shadow)}
+
+footer{margin:2.6rem 0 0;padding:1.2rem 0 0;border-top:1px solid var(--rule);
+       font-size:.86rem;color:var(--faint);text-align:center}
+footer p{color:var(--faint);font-size:.86rem;margin:.3rem 0 0}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs>
+  <symbol id="i-water" viewBox="0 0 24 24"><path d="M2.5 8c3.2-2.4 6.3-2.4 9.5 0s6.3 2.4 9.5 0"/><path d="M2.5 13c3.2-2.4 6.3-2.4 9.5 0s6.3 2.4 9.5 0"/><path d="M2.5 18c3.2-2.4 6.3-2.4 9.5 0s6.3 2.4 9.5 0"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.2c3.9 5.3 6.8 8.2 6.8 11.3a6.8 6.8 0 0 1-13.6 0C5.2 11.4 8.1 8.5 12 3.2z"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M3.5 16.5l5.5-5.5 3.5 3.5 7-7"/><path d="M15.5 7.5h4v4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.2V12l3.4 2"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 8.2l4.2 3L12 4.6l4.8 6.6 4.2-3-2 9.8H5z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.5 15.5l4.6 4.6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.4L3.2 19.6h17.6z"/><path d="M12 9.6v4.2"/><path d="M12 16.6h.01"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M13.5 5H19v5.5"/><path d="M19 5l-7.5 7.5"/><path d="M18 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V7.5A1.5 1.5 0 0 1 6 6h4.5"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6a8.4 8.4 0 0 1 0 16.8z" fill="currentColor" stroke="none"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+
+  <header>
+    <h1>Skill 許願池</h1>
+    <p class="tagline">你想要什麼 AI skill?丟一個願望進池子,然後大家聯署。<br>
+      <b id="rule-line">每三天結算一次,票最高的那一個就會被做成 skill。</b><br>
+      不用註冊、不用登入。</p>
+
+    <div class="pool-wrap"><canvas id="pool" aria-hidden="true"></canvas></div>
+
+    <div class="stats" id="stats" aria-live="polite">
+      <div class="stat"><b id="s-wishes">–</b><span>個願望</span></div>
+      <div class="stat"><b id="s-votes">–</b><span>張聯署</span></div>
+      <div class="stat"><b id="s-granted">–</b><span>已實現</span></div>
+    </div>
+  </header>
+
+  <section class="round" id="round" hidden aria-label="本輪聯署"></section>
+
+  <div id="mode-notice"></div>
+
+  <button class="btn primary wish-cta" id="cta" type="button"
+          aria-expanded="false" aria-controls="compose">
+    <svg class="i solid" aria-hidden="true"><use href="#i-drop"/></svg>我要許願</button>
+
+  <form class="compose" id="compose" hidden novalidate>
+    <div class="field">
+      <label for="f-title">你想要什麼 skill?
+        <span class="count" id="c-title">0/120</span></label>
+      <input type="text" id="f-title" name="title" maxlength="140" autocomplete="off"
+             placeholder="例:把發票 PDF 自動整理成報稅用的表格">
+      <strong class="err" id="e-title"></strong>
+    </div>
+    <div class="field">
+      <label for="f-detail">多說一點 <span class="hint">(選填,但寫清楚比較有人做)</span>
+        <span class="count" id="c-detail">0/2000</span></label>
+      <textarea id="f-detail" name="detail" maxlength="2200"
+                placeholder="你現在怎麼做這件事、哪裡最煩、成功長什麼樣子。&#10;寫得越具體,別人越知道要做什麼。"></textarea>
+      <strong class="err" id="e-detail"></strong>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="f-tags">標籤 <span class="hint">(逗號分隔,最多 5 個)</span></label>
+        <input type="text" id="f-tags" name="tags" autocomplete="off"
+               placeholder="excel, 報稅, 自動化">
+      </div>
+      <div class="field">
+        <label for="f-author">暱稱 <span class="hint">(選填)</span></label>
+        <input type="text" id="f-author" name="author" maxlength="40" autocomplete="off"
+               placeholder="匿名">
+        <strong class="err" id="e-author"></strong>
+      </div>
+    </div>
+    <label class="hp" aria-hidden="true">別填這欄
+      <input type="text" id="f-hp" name="hp" tabindex="-1" autocomplete="off"></label>
+    <div class="compose-actions">
+      <button class="primary" id="submit" type="submit">丟進池子</button>
+      <button class="ghost" id="cancel" type="button">取消</button>
+    </div>
+    <strong class="err" id="e-form"></strong>
+  </form>
+
+  <section class="toolbar" aria-label="篩選與排序">
+    <div class="search">
+      <span class="mag" aria-hidden="true">
+        <svg class="i"><use href="#i-search"/></svg></span>
+      <label class="sr" for="q">搜尋願望</label>
+      <input type="text" id="q" placeholder="搜尋願望…" autocomplete="off">
+    </div>
+    <div class="sorts" role="group" aria-label="排序方式">
+      <button type="button" data-sort="hot" aria-pressed="true">
+        <svg class="i" aria-hidden="true"><use href="#i-trend"/></svg>熱門</button>
+      <button type="button" data-sort="new" aria-pressed="false">
+        <svg class="i" aria-hidden="true"><use href="#i-clock"/></svg>最新</button>
+      <button type="button" data-sort="top" aria-pressed="false">
+        <svg class="i" aria-hidden="true"><use href="#i-star"/></svg>最多聯署</button>
+    </div>
+    <div class="tags-bar" id="tags-bar" role="group" aria-label="標籤篩選"></div>
+  </section>
+
+  <ul class="list" id="list" aria-live="polite" aria-busy="true">
+    <li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>
+  </ul>
+
+  <button id="load-more" type="button" hidden>載入更多</button>
+
+  <footer>
+    <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>
+      ・MIT 授權・可以自己架一個</p>
+    <p>不需要註冊,不放 cookie,不做追蹤。資料庫裡不存你的 IP,
+      只存加鹽雜湊用來認「一人一票」。</p>
+  </footer>
+</div>
+
+<div id="toast" aria-live="assertive" aria-atomic="true"></div>
+<button id="theme" type="button" aria-label="切換亮暗模式">
+  <svg class="i" aria-hidden="true"><use href="#i-theme"/></svg></button>
+
+<script>
+(() => {
+'use strict';
+
+/* ── 設定:自架的人只要改這裡 ──────────────────────────────────────── */
+const CONFIG = {
+  repo: 'https://github.com/shark0120/skill-wishpool',
+  api: '',            // 空字串 = 同源;要接別台就填 'https://example.com'
+  staticData: 'wishes.json',
+  pageSize: 30,
+};
+
+/* ── DOM 小工具 ────────────────────────────────────────────────────────
+   使用者輸入一律走 textContent,永不碰 HTML 注入接口 —— 這是 XSS 的防線,
+   自我測試會掃原始碼,加回去就變紅。                                  */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const $ = (id) => document.getElementById(id);
+function el(tag, opts = {}, kids = []) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(opts)) {
+    if (k === 'text') node.textContent = v;
+    else if (k === 'class') node.className = v;
+    else if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v);
+  }
+  for (const kid of [].concat(kids)) if (kid) node.appendChild(kid);
+  return node;
+}
+function icon(name, cls) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'i' + (cls ? ' ' + cls : ''));
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', '#i-' + name);
+  svg.appendChild(use);
+  return svg;
+}
+
+/* ══ 水池:canvas 動態畫面 ═══════════════════════════════════════════════
+   水面波紋一直在動,偶爾落下一滴水濺起漣漪;有人許願或附議時會立刻落一滴。
+   三件事刻意處理過:
+   1. 顏色從 CSS 變數讀,所以跟著亮暗模式走(切換時 retheme() 重讀)。
+   2. prefers-reduced-motion 時只畫一格靜態畫面,不跑 rAF。
+   3. 分頁切到背景或捲出畫面就停 rAF,但**不清畫布** —— 停下來時留著最後
+      一格,不然回來會看到一片空白,像壞掉一樣。                        */
+const pool = (() => {
+  const cv = $('pool');
+  if (!cv || !cv.getContext) return { drop() {}, retheme() {} };
+  const ctx = cv.getContext('2d');
+  const reduceQ = matchMedia('(prefers-reduced-motion: reduce)');
+  const ripples = [], drops = [];
+  let W = 0, H = 0, surface = 0, t = 0, raf = 0, last = 0, onScreen = true, tries = 0;
+  let rgb = [10, 108, 135];
+  const rgba = (a) => 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')';
+
+  function readTheme() {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent').trim().replace('#', '');
+    if (raw.length >= 6) {
+      const n = parseInt(raw.slice(0, 6), 16);
+      if (!isNaN(n)) rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+  }
+
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = cv.clientWidth; H = cv.clientHeight;
+    if (!W || !H) return false;
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    surface = Math.round(H * 0.48);
+    return true;
+  }
+
+  function band(y, amp, len, speed, phase, color, fill) {
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 5) {
+      const yy = y + Math.sin(x / len + t * speed + phase) * amp;
+      if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    if (fill) {
+      ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+      ctx.fillStyle = color; ctx.fill();
+    } else {
+      ctx.strokeStyle = color; ctx.lineWidth = 1.3; ctx.stroke();
+    }
+  }
+
+  function splash(x) {
+    ripples.push({ x, max: 26 + Math.random() * 32, life: 1.9, age: 0 });
+    ripples.push({ x, max: 12 + Math.random() * 14, life: 1.2, age: -0.18 });
+    if (ripples.length > 30) ripples.splice(0, ripples.length - 30);
+  }
+
+  function spawn(x01) {
+    if (!W) return;
+    const x = Math.max(14, Math.min(W - 14,
+      (x01 == null ? 0.12 + Math.random() * 0.76 : x01) * W));
+    drops.push({ x, y: -8, v: 95 + Math.random() * 70 });
+    if (drops.length > 12) drops.shift();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, rgba(0.055));
+    sky.addColorStop(1, rgba(0.015));
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+    band(surface + 7, 4.5, 34, -1.05, 1.4, rgba(0.10), true);
+    band(surface, 5.5, 46, 0.75, 0, rgba(0.16), true);
+
+    for (const r of ripples) {
+      const p = r.age / r.life;
+      if (p <= 0 || p > 1) continue;
+      const rr = Math.max(1, r.max * p);
+      ctx.beginPath();
+      ctx.ellipse(r.x, surface + 4, rr, Math.max(0.7, rr * 0.3), 0, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba((1 - p) * 0.55);
+      ctx.lineWidth = 1.2; ctx.stroke();
+    }
+
+    band(surface + 7, 4.5, 34, -1.05, 1.4, rgba(0.26), false);
+    band(surface, 5.5, 46, 0.75, 0, rgba(0.5), false);
+
+    for (const d of drops) {
+      ctx.beginPath();
+      ctx.ellipse(d.x, d.y, 2.5, 4.4, 0, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(0.85); ctx.fill();
+    }
+  }
+
+  function step(now) {
+    const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
+    last = now; t += dt;
+    for (let i = drops.length - 1; i >= 0; i--) {
+      drops[i].y += drops[i].v * dt;
+      if (drops[i].y >= surface) { splash(drops[i].x); drops.splice(i, 1); }
+    }
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      ripples[i].age += dt;
+      if (ripples[i].age > ripples[i].life) ripples.splice(i, 1);
+    }
+    if (Math.random() < dt * 0.45) spawn();   // 平均兩秒多落一滴
+    draw();
+    raf = requestAnimationFrame(step);
+  }
+
+  function start() {
+    if (raf || reduceQ.matches || document.hidden || !onScreen || !W) return;
+    last = 0;
+    raf = requestAnimationFrame(step);
+  }
+  function stop() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;   // 不清畫布:留著最後一格
+  }
+  function still() {
+    t = 0.6; drops.length = 0; ripples.length = 0;
+    ripples.push({ x: W * 0.32, max: 34, life: 2, age: 1.1 });
+    ripples.push({ x: W * 0.68, max: 22, life: 2, age: 0.6 });
+    draw();
+  }
+
+  function boot() {
+    readTheme();
+    if (!resize()) {
+      if (tries++ < 20) setTimeout(boot, 120);
+      return;
+    }
+    // 一定先畫一格。在背景分頁載入時 document.hidden 是 true,start() 會
+    // 直接 return —— 少了這一行,使用者切回來之前就會看到一個空白的框,
+    // 看起來像壞掉。實測抓到過:量測時 visibilityState=hidden,canvas 全透明。
+    still();
+    if (!reduceQ.matches) start();
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop(); else start();
+  });
+  if (window.IntersectionObserver) {
+    new IntersectionObserver((entries) => {
+      onScreen = entries.some((e) => e.isIntersecting);
+      if (onScreen) start(); else stop();
+    }, { threshold: 0 }).observe(cv);
+  }
+  addEventListener('resize', () => {
+    if (resize()) { if (reduceQ.matches) still(); else draw(); }
+  });
+  if (reduceQ.addEventListener) {
+    reduceQ.addEventListener('change', () => {
+      if (reduceQ.matches) { stop(); still(); } else start();
+    });
+  }
+  boot();
+
+  return {
+    drop(x01) {
+      if (reduceQ.matches) { still(); return; }
+      spawn(x01);
+      start();
+    },
+    retheme() { readTheme(); if (reduceQ.matches) still(); else draw(); },
+  };
+})();
+
+/* ══ 狀態 ═══════════════════════════════════════════════════════════════ */
+const state = {
+  mode: 'loading',      // 'live' = 有後端可寫;'static' = 唯讀展示
+  readonly: false,
+  sort: 'hot',
+  q: '',
+  tag: '',
+  offset: 0,
+  total: 0,
+  wishes: [],
+  all: null,            // 靜態模式:整包資料
+  tagCounts: null,      // 全池標籤統計(伺服器算,不受篩選影響)
+  round: null,          // 本輪聯署(倒數、領先者、歷屆)
+  limits: { title_max: 120, detail_max: 2000 },
+  voted: new Set(),
+  busy: false,
+};
+
+const VOTED_KEY = 'wishpool.voted.v1';
+try { state.voted = new Set(JSON.parse(localStorage.getItem(VOTED_KEY) || '[]')); } catch (e) {}
+const rememberVote = (id) => {
+  state.voted.add(id);
+  try { localStorage.setItem(VOTED_KEY, JSON.stringify([...state.voted])); } catch (e) {}
+};
+
+function toast(msg, bad) {
+  const node = el('div', { class: 'toast' + (bad ? ' bad' : ''), text: msg });
+  $('toast').appendChild(node);
+  setTimeout(() => node.remove(), bad ? 6000 : 3600);
+}
+
+/* ══ API ════════════════════════════════════════════════════════════════ */
+async function api(path, opts = {}) {
+  const res = await fetch(CONFIG.api + path, {
+    headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
+    ...opts,
+  });
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const err = new Error(data.error || ('伺服器回了 ' + res.status));
+    err.code = data.code; err.field = data.field; err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+function ago(iso) {
+  const t = Date.parse(iso);
+  if (!t) return '';
+  const mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1) return '剛剛';
+  if (mins < 60) return mins + ' 分鐘前';
+  if (mins < 1440) return Math.floor(mins / 60) + ' 小時前';
+  if (mins < 43200) return Math.floor(mins / 1440) + ' 天前';
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+const STATUS_LABEL = { planned: '有人接了', granted: '已實現', declined: '暫不做' };
+
+/* ══ 本輪聯署 ═══════════════════════════════════════════════════════════ */
+function fmtLeft(sec) {
+  if (sec <= 0) return '結算中…';
+  const d = Math.floor(sec / 86400);
+  const h = String(Math.floor(sec % 86400 / 3600)).padStart(2, '0');
+  const m = String(Math.floor(sec % 3600 / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return (d ? d + ' 天 ' : '') + h + ':' + m + ':' + s;
+}
+
+function renderRound() {
+  const r = state.round;
+  const box = $('round');
+  if (!r) { box.hidden = true; return; }
+  box.hidden = false;
+  box.replaceChildren();
+
+  $('rule-line').textContent =
+    '每 ' + r.cycle_days + ' 天結算一次,票最高的那一個就會被做成 skill。';
+
+  // 靜態快照沒有真的結算時間(ends_at 是 null),那就不要顯示假的倒數。
+  const live = r.ends_at != null && r.seconds_left != null;
+  box.appendChild(el('div', { class: 'round-top' }, [
+    el('span', { class: 'round-idx',
+                 text: r.index ? '第 ' + r.index + ' 輪聯署' : '聯署規則' }),
+    live ? el('span', { class: 'meta',
+                        text: '結算於 ' + new Date(r.ends_at).toLocaleString() }) : null,
+    live ? el('span', { class: 'clock', id: 'clock', role: 'timer',
+                        text: fmtLeft(r.seconds_left) }) : null,
+  ].filter(Boolean)));
+
+  if (r.leader) {
+    const link = el('a', { href: '#w' + r.leader.id, text: r.leader.title });
+    link.addEventListener('click', () => flash(r.leader.id));
+    box.appendChild(el('div', { class: 'leader' }, [
+      el('span', { class: 'mark' }, [icon('crown')]),
+      el('span', { class: 't' }, [
+        el('span', { class: 'meta', text: '目前領先　' }), link,
+      ]),
+      el('span', { class: 'n', text: r.leader.votes + ' 票' }),
+    ]));
+  } else {
+    box.appendChild(el('div', { class: 'leader' }, [
+      el('span', { class: 'mark' }, [icon('water')]),
+      el('span', { class: 't', text: live
+        ? '這一輪還沒有願望達到 ' + r.min_votes + ' 票的門檻。'
+        : '這是唯讀快照,沒有進行中的聯署。自己架一個池子就會開始計時。' }),
+    ]));
+  }
+
+  box.appendChild(el('p', { class: 'round-rule',
+    text: '規則:同一個來源一個願望只能附議一次。結算時票最高的出線(同票先許願的贏),'
+        + '出線的願望會標成「有人接了」並離開候選,下一輪換下一名。'
+        + '沒選上的票會留著繼續累積。' }));
+
+  if (r.history && r.history.length) {
+    const items = r.history.map((h) => {
+      const li = el('li', {}, [el('span', { class: 'r', text: '第 ' + h.index + ' 輪' })]);
+      if (h.winner_id) {
+        const link = el('a', { href: '#w' + h.winner_id, text: h.title || '(已刪除的願望)' });
+        link.addEventListener('click', () => flash(h.winner_id));
+        li.appendChild(el('span', { class: 't' }, [link]));
+        li.appendChild(el('span', { class: 'n meta', text: h.votes + ' 票' }));
+        if (h.skill_url) {
+          li.appendChild(el('a', {
+            class: 'granted-link', href: h.skill_url, target: '_blank',
+            rel: 'noopener noreferrer nofollow',
+          }, [document.createTextNode('成品'), icon('link')]));
+        } else if (h.status === 'granted') {
+          li.appendChild(el('span', { class: 'badge granted', text: '已實現' }));
+        } else {
+          li.appendChild(el('span', { class: 'badge planned', text: '製作中' }));
+        }
+      } else {
+        li.appendChild(el('span', { class: 't meta', text: h.note || '沒有結算' }));
+      }
+      return li;
+    });
+    box.appendChild(el('details', { class: 'history' }, [
+      el('summary', {}, [icon('clock'),
+                         document.createTextNode('歷屆結果(' + r.history.length + ' 輪)')]),
+      el('ol', {}, items),
+    ]));
+  }
+}
+
+function flash(id) {
+  const node = $('w' + id);
+  if (!node) return;
+  node.classList.add('flash');
+  node.scrollIntoView({ block: 'center' });
+}
+
+let clockTimer;
+function startClock() {
+  clearInterval(clockTimer);
+  if (!state.round || state.round.ends_at == null) return;
+  const endsAt = Date.parse(state.round.ends_at);
+  if (!endsAt) return;
+  clockTimer = setInterval(() => {
+    const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+    const node = $('clock');
+    if (!node) return;
+    node.textContent = fmtLeft(left);
+    node.classList.toggle('soon', left > 0 && left < 3600 * 6);
+    if (left <= 0) { clearInterval(clockTimer); setTimeout(refreshRound, 3000); }
+  }, 1000);
+}
+
+async function refreshRound() {
+  if (state.mode !== 'live') return;
+  try {
+    const data = await api('api/round');
+    state.round = data.round;
+    renderRound();
+    startClock();
+  } catch (e) { /* 倒數不是核心功能,失敗就安靜跳過 */ }
+}
+
+/* ══ 列表 ═══════════════════════════════════════════════════════════════ */
+function renderStats(s) {
+  if (!s) return;
+  $('s-wishes').textContent = s.wishes ?? '–';
+  $('s-votes').textContent = s.votes ?? '–';
+  $('s-granted').textContent = s.granted ?? '–';
+}
+
+/* 標籤列的詞彙表必須是**全池**的,不能用篩選後的結果重算 ——
+   否則按下 #excel 之後標籤列只剩它的共現標籤,想換標籤得先按「全部」。
+   live 模式用伺服器算好的 state.tagCounts;靜態模式用整包快照自己算。 */
+function renderTags() {
+  let top = state.tagCounts;
+  if (!top) {
+    const counts = new Map();
+    for (const w of (state.all || state.wishes)) {
+      for (const t of w.tags) counts.set(t, (counts.get(t) || 0) + 1);
+    }
+    top = [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  }
+  top = top.slice(0, 14);
+  const bar = $('tags-bar');
+  bar.replaceChildren();
+  if (!top.length) return;
+  const all = el('button', { type: 'button', text: '全部',
+                             'aria-pressed': state.tag ? 'false' : 'true' });
+  all.addEventListener('click', () => setTag(''));
+  bar.appendChild(all);
+  for (const [tag, n] of top) {
+    const b = el('button', { type: 'button', text: '#' + tag + ' ' + n,
+                             'aria-pressed': state.tag === tag ? 'true' : 'false' });
+    b.addEventListener('click', () => setTag(state.tag === tag ? '' : tag));
+    bar.appendChild(b);
+  }
+}
+
+function card(w) {
+  const voted = state.voted.has(w.id);
+  const vote = el('button', {
+    class: 'vote', type: 'button', 'aria-pressed': voted ? 'true' : 'false',
+    'aria-label': (voted ? '已附議' : '附議') + '「' + w.title + '」,目前 ' + w.votes + ' 票',
+    'data-id': w.id,
+  }, [
+    el('span', { class: 'n', text: String(w.votes), 'aria-hidden': 'true' }),
+    el('span', { class: 'lbl', text: voted ? '已署' : '附議', 'aria-hidden': 'true' }),
+  ]);
+  if (state.readonly || state.mode === 'static') vote.disabled = true;
+
+  const body = el('div', { class: 'wish-body' }, [el('h2', { text: w.title })]);
+
+  if (w.detail) body.appendChild(el('p', { class: 'detail clamped', text: w.detail }));
+
+  if (w.tags.length) {
+    body.appendChild(el('div', { class: 'chips' },
+      w.tags.map((t) => el('span', { class: 'chip', text: '#' + t }))));
+  }
+
+  const foot = el('div', { class: 'wish-foot' }, [
+    el('span', { class: 'meta', text: (w.author || '匿名') + '・' + ago(w.created_at) }),
+  ]);
+  if (STATUS_LABEL[w.status]) {
+    foot.appendChild(el('span', { class: 'badge ' + w.status, text: STATUS_LABEL[w.status] }));
+  }
+  if (w.skill_url) {
+    foot.appendChild(el('a', {
+      class: 'granted-link', href: w.skill_url, rel: 'noopener noreferrer nofollow',
+      target: '_blank',
+    }, [document.createTextNode('看成品'), icon('link')]));
+  }
+  if (w.note) foot.appendChild(el('span', { class: 'meta', text: '「' + w.note + '」' }));
+  body.appendChild(foot);
+
+  vote.addEventListener('click', () => doVote(w, vote));
+  return el('li', { class: 'wish', id: 'w' + w.id }, [vote, body]);
+}
+
+/* 只有真的被截斷的說明才給「展開全部」,不然按了沒反應。
+   一定要等節點進了 DOM 才量得到 scrollHeight,但**不要用 requestAnimationFrame** ——
+   分頁在背景時 rAF 整個停擺,展開鈕就不會出現;scrollHeight 會強制算版面,
+   不管分頁可不可見都準。(實測:hidden 分頁下 rAF 版本永遠生不出按鈕。) */
+function attachExpanders() {
+  for (const detail of document.querySelectorAll('#list .detail.clamped')) {
+    if (detail.dataset.checked) continue;
+    detail.dataset.checked = '1';
+    if (detail.scrollHeight - detail.clientHeight <= 4) continue;
+    const more = el('button', { class: 'more', type: 'button', text: '展開全部' });
+    more.addEventListener('click', () => {
+      const clamped = detail.classList.toggle('clamped');
+      more.textContent = clamped ? '展開全部' : '收起';
+    });
+    detail.after(more);
+  }
+}
+
+function renderList(append) {
+  const list = $('list');
+  if (!append) list.replaceChildren();
+  list.removeAttribute('aria-busy');
+  if (!state.wishes.length) {
+    list.replaceChildren(el('li', { class: 'empty' }, [
+      icon('water', 'lg'),
+      el('p', { text: state.q || state.tag
+        ? '這個條件下沒有願望。' : '池子是空的,你可以是第一個。' }),
+    ]));
+  } else {
+    const start = append ? list.querySelectorAll('.wish').length : 0;
+    for (const w of state.wishes.slice(start)) list.appendChild(card(w));
+  }
+  attachExpanders();
+  $('load-more').hidden = state.wishes.length >= state.total;
+  const hash = location.hash.match(/^#w(\d+)$/);
+  if (hash && !append) flash(hash[1]);
+}
+
+function filterStatic() {
+  const q = state.q.toLowerCase();
+  let items = state.all.filter((w) => {
+    if (state.tag && !w.tags.includes(state.tag)) return false;
+    if (!q) return true;
+    return (w.title + ' ' + w.detail + ' ' + w.tags.join(' ')).toLowerCase().includes(q);
+  });
+  const hours = (w) => (Date.now() - Date.parse(w.created_at)) / 3600000;
+  const cmp = {
+    new: (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id,
+    top: (a, b) => b.votes - a.votes || b.id - a.id,
+    hot: (a, b) => (b.votes + 1) / Math.pow(hours(b) + 2, 2)
+                 - (a.votes + 1) / Math.pow(hours(a) + 2, 2),
+  }[state.sort];
+  items = items.slice().sort(cmp);
+  state.total = items.length;
+  return items.slice(0, state.offset + CONFIG.pageSize);
+}
+
+async function load(append) {
+  if (state.busy) return;
+  state.busy = true;
+  try {
+    if (state.mode === 'static') {
+      state.wishes = filterStatic();
+      renderList(append);
+      return;
+    }
+    const params = new URLSearchParams({ sort: state.sort, offset: '0' });
+    if (state.q) params.set('q', state.q);
+    if (state.tag) params.set('tag', state.tag);
+    params.set('limit', String(state.offset + CONFIG.pageSize));
+    const data = await api('api/wishes?' + params.toString());
+    state.wishes = data.wishes;
+    state.total = data.total;
+    state.readonly = !!data.readonly;
+    if (data.tags) state.tagCounts = data.tags;
+    renderStats(data.stats);
+    renderList(append);
+    renderTags();
+  } catch (err) {
+    $('list').removeAttribute('aria-busy');
+    $('list').replaceChildren(el('li', { class: 'empty' }, [
+      icon('alert', 'lg'),
+      el('p', { text: '讀不到願望:' + err.message }),
+    ]));
+  } finally {
+    state.busy = false;
+  }
+}
+
+/* ══ 附議 ═══════════════════════════════════════════════════════════════ */
+async function doVote(w, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const data = await api('api/wishes/' + w.id + '/vote', { method: 'POST' });
+    w.votes = data.votes;
+    btn.querySelector('.n').textContent = String(data.votes);
+    btn.querySelector('.lbl').textContent = '已署';
+    btn.setAttribute('aria-pressed', 'true');
+    btn.setAttribute('aria-label', '已附議「' + w.title + '」,目前 ' + data.votes + ' 票');
+    rememberVote(w.id);
+    toast(data.already_voted ? '你已經附議過這個願望了' : '附議成功');
+    if (!data.already_voted) {
+      const s = $('s-votes');
+      s.textContent = String((parseInt(s.textContent, 10) || 0) + 1);
+      pool.drop();          // 水面濺一下
+      refreshRound();       // 領先者可能換人了
+    }
+  } catch (err) {
+    toast(err.message, true);
+    if (err.code !== 'rate_limited') btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+}
+
+/* ══ 許願 ═══════════════════════════════════════════════════════════════ */
+function clearErrors() {
+  for (const id of ['e-title', 'e-detail', 'e-author', 'e-form']) $(id).textContent = '';
+}
+
+async function submitWish(ev) {
+  ev.preventDefault();
+  clearErrors();
+  const payload = {
+    title: $('f-title').value,
+    detail: $('f-detail').value,
+    tags: $('f-tags').value,
+    author: $('f-author').value,
+    hp: $('f-hp').value,
+  };
+  if (!payload.title.trim()) {
+    $('e-title').textContent = '要許什麼願?';
+    $('f-title').focus();
+    return;
+  }
+  const btn = $('submit');
+  btn.disabled = true;
+  btn.textContent = '丟進去…';
+  try {
+    const data = await api('api/wishes', { method: 'POST', body: JSON.stringify(payload) });
+    rememberVote(data.wish.id);
+    $('compose').reset();
+    updateCounts();
+    closeCompose();
+    state.q = ''; $('q').value = '';
+    state.tag = ''; state.offset = 0; state.sort = 'new';
+    for (const b of document.querySelectorAll('.sorts button')) {
+      b.setAttribute('aria-pressed', b.dataset.sort === 'new' ? 'true' : 'false');
+    }
+    location.hash = 'w' + data.wish.id;
+    pool.drop(0.5);
+    await load(false);
+    refreshRound();
+    toast(data.merged ? (data.message || '有人許過一樣的願了,幫你加上一票。')
+                      : '願望丟進池子了,第 ' + data.wish.id + ' 號');
+  } catch (err) {
+    const target = { title: 'e-title', detail: 'e-detail', author: 'e-author' }[err.field];
+    $(target || 'e-form').textContent = err.message;
+    if (target) $('f-' + err.field).focus();
+    else toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '丟進池子';
+  }
+}
+
+function updateCounts() {
+  const pairs = [['f-title', 'c-title', state.limits.title_max],
+                 ['f-detail', 'c-detail', state.limits.detail_max]];
+  for (const [inputId, countId, max] of pairs) {
+    const n = [...$(inputId).value.trim()].length;
+    const node = $(countId);
+    node.textContent = n + '/' + max;
+    node.classList.toggle('over', n > max);
+  }
+}
+
+function openCompose() {
+  $('compose').hidden = false;
+  $('cta').setAttribute('aria-expanded', 'true');
+  $('cta').hidden = true;
+  $('f-title').focus();
+}
+function closeCompose() {
+  $('compose').hidden = true;
+  $('cta').hidden = false;
+  $('cta').setAttribute('aria-expanded', 'false');
+}
+
+function setTag(tag) {
+  state.tag = tag;
+  state.offset = 0;
+  renderTags();
+  load(false);
+}
+
+/* ══ 唯讀 / 靜態模式 ════════════════════════════════════════════════════ */
+function showModeNotice() {
+  const box = $('mode-notice');
+  box.replaceChildren();
+  if (state.mode === 'static') {
+    const url = CONFIG.repo + '/issues/new?labels=wish&template=skill-wish.yml';
+    box.appendChild(el('div', { class: 'notice' }, [
+      el('b', { text: '這頁是唯讀展示。' }),
+      document.createTextNode(' 沒有連到後端,所以只能看不能聯署。要許願請到 '),
+      el('a', { href: url, rel: 'noopener', target: '_blank', text: 'GitHub 開一張願望單' }),
+      document.createTextNode(',或照 README 自己架一個池子(一行指令,不用資料庫伺服器)。'),
+    ]));
+    const cta = $('cta');
+    cta.replaceChildren(icon('link'), document.createTextNode('到 GitHub 許願'));
+    cta.setAttribute('aria-expanded', 'false');
+    cta.removeAttribute('aria-controls');
+    cta.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+  } else if (state.readonly) {
+    box.appendChild(el('div', { class: 'notice' }, [
+      el('b', { text: '這個池子目前是唯讀的。' }),
+      document.createTextNode(' 站長把它設成展示模式,暫時不收新願望。'),
+    ]));
+    $('cta').disabled = true;
+  } else {
+    $('cta').addEventListener('click', openCompose);
+  }
+}
+
+/* ══ 啟動 ═══════════════════════════════════════════════════════════════ */
+async function boot() {
+  $('repo-link').href = CONFIG.repo;
+  try {
+    const health = await api('api/health');
+    state.mode = 'live';
+    state.readonly = !!health.readonly;
+    if (health.limits) Object.assign(state.limits, health.limits);
+    state.round = health.round || null;
+    renderStats(health.stats);
+    renderRound();
+    startClock();
+  } catch (e) {
+    // 沒有後端(例如放在 GitHub Pages)→ 退成唯讀,讀同層的 wishes.json。
+    state.mode = 'static';
+    try {
+      const res = await fetch(CONFIG.staticData, { cache: 'no-cache' });
+      const data = await res.json();
+      state.all = (data.wishes || data).map((w, i) => ({
+        id: w.id ?? i + 1, title: w.title || '', detail: w.detail || '',
+        tags: w.tags || [], author: w.author || '', status: w.status || 'open',
+        votes: w.votes || 0, skill_url: w.skill_url || '', note: w.note || '',
+        created_at: w.created_at || new Date(0).toISOString(),
+      }));
+      renderStats({
+        wishes: state.all.length,
+        votes: state.all.reduce((n, w) => n + w.votes, 0),
+        granted: state.all.filter((w) => w.status === 'granted'
+                                      || w.status === 'planned').length,
+      });
+      if (data.round) { state.round = data.round; renderRound(); startClock(); }
+    } catch (e2) {
+      // 讀不到快照時顯示「–」,不要顯示 0 —— 0 是一個看起來很確定的假數字。
+      state.all = [];
+      renderStats({ wishes: null, votes: null, granted: null });
+    }
+    renderTags();
+  }
+  showModeNotice();
+  updateCounts();
+  await load(false);
+  if (state.mode === 'static') renderTags();
+}
+
+/* ══ 事件綁定 ═══════════════════════════════════════════════════════════ */
+$('compose').addEventListener('submit', submitWish);
+$('cancel').addEventListener('click', closeCompose);
+$('f-title').addEventListener('input', updateCounts);
+$('f-detail').addEventListener('input', updateCounts);
+$('load-more').addEventListener('click', () => { state.offset += CONFIG.pageSize; load(true); });
+for (const b of document.querySelectorAll('.sorts button')) {
+  b.addEventListener('click', () => {
+    state.sort = b.dataset.sort;
+    state.offset = 0;
+    for (const other of document.querySelectorAll('.sorts button')) {
+      other.setAttribute('aria-pressed', other === b ? 'true' : 'false');
+    }
+    load(false);
+  });
+}
+let qTimer;
+$('q').addEventListener('input', (ev) => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => {
+    state.q = ev.target.value.trim();
+    state.offset = 0;
+    load(false);
+  }, 260);
+});
+
+(() => {
+  const root = document.documentElement;
+  const KEY = 'wishpool.theme';
+  const saved = localStorage.getItem(KEY);
+  if (saved === 'dark' || saved === 'light') root.dataset.theme = saved;
+  $('theme').addEventListener('click', () => {
+    const isDark = root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : matchMedia('(prefers-color-scheme:dark)').matches;
+    const next = isDark ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+    pool.retheme();
+  });
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change', () => pool.retheme());
+})();
+
+boot();
+})();
+</script>
+</body>
+</html>

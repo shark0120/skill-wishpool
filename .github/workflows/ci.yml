@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 專案宣稱支援 3.9+,所以就真的每一版都跑,不要只跑一版然後在 README 亂寫。
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 零依賴檢查
+        run: |
+          test ! -f requirements.txt || (echo "這個專案不該有 requirements.txt" && exit 1)
+          test ! -f package.json || (echo "這個專案不該有 package.json" && exit 1)
+
+      - name: 語法檢查
+        run: |
+          python -m py_compile server.py scripts/*.py
+
+      - name: 對比度(WCAG AA)
+        run: python scripts/check_contrast.py
+
+      - name: 端到端自我測試
+        run: python scripts/selftest.py
+
+      - name: 反向對照(拆掉防護,測試必須變紅)
+        run: python scripts/selftest.py --verify-gauge
+
+  static-export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 匯出的靜態快照必須跟版控裡的一致
+        run: |
+          python scripts/export_static.py --from-seed
+          # generated_at 每次都會變,所以比對時把它剔掉。
+          python - <<'PY'
+          import json, subprocess, sys
+          with open('public/wishes.json', encoding='utf-8') as fh:
+              fresh = json.load(fh)
+          committed = json.loads(subprocess.check_output(
+              ['git', 'show', 'HEAD:public/wishes.json']).decode('utf-8'))
+          for d in (fresh, committed):
+              d.pop('generated_at', None)
+          if fresh != committed:
+              print('public/wishes.json 跟 data/seed.json 不同步了。')
+              print('請跑 python scripts/export_static.py --from-seed 再 commit。')
+              sys.exit(1)
+          print('靜態快照同步。')
+          PY
