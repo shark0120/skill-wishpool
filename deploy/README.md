@@ -143,6 +143,44 @@ include /www/server/panel/vhost/nginx/extension/<你的網域>/*.conf;
   (正則),優先於我們的 `location /`,所以照原樣就會運作。不要自己再加一條蓋掉它。
 - **reload 不要 restart。** reload 是平滑換設定,其他站的連線不會斷。
 
+## ⚠️ 放在 Cloudflare(或任何會改寫 HTML 的 CDN)後面
+
+伺服器送出頁面時會即時算 inline `<script>`/`<style>` 的 sha256 並寫進 CSP。
+這讓單檔頁面也能拿到不含 `'unsafe-inline'` 的 CSP —— 但它有一個代價:
+
+**雜湊是對「我們送出的位元組」算的。CDN 只要改寫 HTML,雜湊就對不上,整頁 JS 被擋成白畫面。**
+
+Cloudflare 上要檢查三個開關(Speed → Optimization / Analytics):
+
+| 功能 | 影響 | 該怎麼設 |
+|---|---|---|
+| **Rocket Loader** | 會改寫 `<script>` → **雜湊必炸,整頁死** | **關掉** |
+| **Auto Minify(HTML)** | 會改寫 inline 區塊 → 雜湊必炸 | **關掉** |
+| **Web Analytics / Browser Insights** | 注入 `beacon.min.js` → 被 CSP 擋掉,每次載入留一則 console 錯誤,而且違反「零外部請求」 | **關掉**(想留就改用 `WISHPOOL_CSP=unsafe-inline`,但那等於放棄這道防線) |
+
+實測(skill-tw.com,2026-08-17):Web Analytics 是開著的,beacon 被 CSP 擋下:
+
+```
+Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/…' violates
+the following Content Security Policy directive: "script-src 'sha256-…'"
+```
+
+擋掉是好事(追蹤沒生效),但那三個開關沒關就等於把「頁面會不會死」交給 CDN 的設定。
+自己驗一次最快:
+
+```bash
+# 線上頁面的 inline script 雜湊,必須跟 CSP 標頭裡宣告的那個一樣
+curl -s https://你的網域/ | python3 -c '
+import base64, hashlib, re, sys
+body = sys.stdin.buffer.read()
+for tag, inner in re.findall(rb"<(script|style)\b[^>]*>(.*?)</\1\s*>", body, re.S | re.I):
+    print(tag.decode(), "sha256-" + base64.b64encode(hashlib.sha256(inner).digest()).decode())
+'
+curl -sI https://你的網域/ | grep -i content-security-policy
+```
+
+兩邊的 sha256 對不上,就是 CDN 改寫了你的 HTML。
+
 ## 只想放一個唯讀展示站
 
 不用起服務、不用改 nginx:

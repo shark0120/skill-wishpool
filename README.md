@@ -103,6 +103,7 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 | `WISHPOOL_RATE_VOTE_MAX` / `_WINDOW` | `60` / `3600` | 每個來源每小時可附議幾次 |
 | `WISHPOOL_CYCLE_DAYS` | `3` | 幾天結算一次(也可用 `--cycle-days`) |
 | `WISHPOOL_MIN_VOTES` | `1` | 出線門檻 |
+| `WISHPOOL_CSP` | `hash` | `hash` 用即時算的 inline 雜湊(最嚴);`unsafe-inline` 是**放在會改寫 HTML 的 CDN 後面時的退路**;`off` 完全不發。填錯的值會退回 `hash`,不會變成沒有 CSP |
 
 ---
 
@@ -120,7 +121,10 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 - **XSS**:使用者內容全程走 `textContent`,前端沒有任何 `innerHTML` / `insertAdjacentHTML` / `eval`(自我測試會掃原始碼,加回去就變紅)。
 - **CSP 用雜湊而非 `unsafe-inline`**:伺服器在送出頁面時即時算 inline 區塊的 sha256,所以雜湊永遠不會跟內容脫節;注入進 DOM 的 `<script>` 對不上雜湊就不會執行。
 - **管理端 fail-closed**:沒設權杖就整組 503;權杖比對用 `hmac.compare_digest`。
-- **零外部請求**:字型用系統內建,沒有 CDN、沒有 Google Fonts、沒有分析工具。整頁離線也能開。
+- **程式碼本身零外部請求**:字型用系統內建,沒有 CDN、沒有 Google Fonts、沒有分析工具,整頁離線也能開。
+  **但你放在前面的 CDN 可能自己塞東西** —— 實測 Cloudflare 的 Web Analytics 會把
+  `beacon.min.js` 注入 HTML;我們的 CSP 把它擋掉了(console 會留下一則 blocked 訊息),
+  但要真正做到零外部請求,得去 CDN 那邊關掉那個功能。見 [`deploy/README.md`](deploy/README.md)。
 
 **沒做,你要自己知道:**
 
@@ -136,7 +140,7 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 ## 測試
 
 ```bash
-python3 scripts/selftest.py                 # 90 項端到端檢查(真的起伺服器、真的打 HTTP)
+python3 scripts/selftest.py                 # 94 項端到端檢查(真的起伺服器、真的打 HTTP)
 python3 scripts/selftest.py --verify-gauge  # 反向對照:把防護拆掉,確認測試會紅
 python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實算 WCAG 對比度
 ```
@@ -170,7 +174,7 @@ python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實
 - **水池是 canvas 畫的**,不是圖檔:水面波紋一直在動,有人許願或附議時會落一滴水
   濺起漣漪。顏色從 CSS 變數讀,所以跟著亮暗模式走;`prefers-reduced-motion` 時
   只畫一格靜態畫面;分頁切到背景就停止動畫,但**不清畫布**(不然回來會看到空白)。
-- 整頁 284 個 DOM 節點、零外部請求,離線也能開。
+- 整頁不到 300 個 DOM 節點,程式碼本身零外部請求(CDN 的注入見上一節)。
 
 ## 想改成別的主題?
 
@@ -205,7 +209,7 @@ python3 server.py --seed     # http://127.0.0.1:8787
 - **Anti-abuse**: per-source rate limits in SQLite, one vote per source per wish enforced by
   a DB unique key, duplicate-title merging, input sanitisation, hash-based CSP, fail-closed
   admin endpoints. Raw IPs are never stored — only `sha256(salt + ip)`.
-- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (90 checks).
+- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (94 checks).
   `--verify-gauge` sabotages six guards and requires the suite to go red, so the suite
   can't quietly become a rubber stamp. It has already caught a false green (a traversal
   test that never actually sent `..`, because `urllib` normalises the path), a real hole

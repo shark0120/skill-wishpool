@@ -137,6 +137,7 @@ CFG = {
     "cycle_days": CYCLE_DAYS_DEFAULT,
     "cycle_seconds": CYCLE_DAYS_DEFAULT * 86400,
     "min_votes": MIN_VOTES_DEFAULT,
+    "csp_mode": "hash",     # hash | unsafe-inline | off
 }
 
 
@@ -582,14 +583,25 @@ def csp_for_html(body: bytes) -> str:
     """用實際送出去的位元組算 inline 區塊的 sha256,所以雜湊永遠不會跟內容脫節。
 
     這樣單檔頁面也能拿到不含 'unsafe-inline' 的 CSP:注入進 DOM 的 <script>
-    雜湊對不上就不會執行。
+    雜湊對不上就不會執行(實測有效:Cloudflare 的 Web Analytics beacon 被擋掉了)。
+
+    ⚠️ 但這也是唯一一個「CDN 會弄壞你的網站」的地方:雜湊是對**我們送出的位元組**
+    算的,如果前面的 CDN 改寫了 HTML(Cloudflare 的 Rocket Loader、Auto Minify
+    之類),原本那段 inline script 的雜湊就對不上 → 整頁 JS 被擋 → 白畫面。
+    遇到這種環境有兩個選擇:把 CDN 的改寫功能關掉(建議),或用
+    WISHPOOL_CSP=unsafe-inline 退一步(CSP 變弱,但頁面不會死)。
     """
-    key = hashlib.sha256(body).hexdigest()
+    mode = CFG.get("csp_mode", "hash")
+    if mode == "off":
+        return ""
+    key = hashlib.sha256(body).hexdigest() + "|" + mode
     hit = _csp_cache.get(key)
     if hit:
         return hit
     scripts, styles = [], []
-    for tag, inner in _INLINE_BLOCK.findall(body):
+    if mode == "unsafe-inline":
+        scripts, styles = ["'unsafe-inline'"], ["'unsafe-inline'"]
+    for tag, inner in _INLINE_BLOCK.findall(body) if mode == "hash" else ():
         digest = "'sha256-%s'" % base64.b64encode(hashlib.sha256(inner).digest()).decode()
         (scripts if tag.lower() == b"script" else styles).append(digest)
     # 保險:HTML 裡明明有 <script 卻抓不到雜湊,就退回 'unsafe-inline',
@@ -929,7 +941,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         if ext == ".html":
             self.send_header("Cache-Control", "no-cache")
-            self.send_header("Content-Security-Policy", csp_for_html(body))
+            policy = csp_for_html(body)
+            if policy:
+                self.send_header("Content-Security-Policy", policy)
         elif ext == ".json":
             self.send_header("Cache-Control", "no-cache")
         else:
@@ -1019,6 +1033,8 @@ def main(argv=None):
     CFG["admin_token"] = os.environ.get("WISHPOOL_ADMIN_TOKEN", "")
     CFG["allow_origin"] = os.environ.get("WISHPOOL_ALLOW_ORIGIN", "")
     CFG["trust_proxy"] = os.environ.get("WISHPOOL_TRUST_PROXY", "") == "1"
+    csp = os.environ.get("WISHPOOL_CSP", "hash")
+    CFG["csp_mode"] = csp if csp in ("hash", "unsafe-inline", "off") else "hash"
     CFG["salt"] = load_salt(os.environ.get(
         "WISHPOOL_SALT_FILE", os.path.join(os.path.dirname(CFG["db"]), "ip_salt")))
 

@@ -483,6 +483,34 @@ def suite_rounds(c, src_root):
         c.eq("提前結算後第二名也出線", data["wish"]["status"], "planned")
 
 
+def suite_csp_modes(c, src_root):
+    """CSP 的三種模式。
+
+    `hash` 是預設也是最強的,但雜湊是對「我們送出的位元組」算的 —— 前面的 CDN
+    如果改寫 HTML(Cloudflare Rocket Loader / Auto Minify 之類),雜湊就對不上、
+    整頁 JS 被擋成白畫面。所以要有退路,而且退路必須真的有效。
+    """
+    with Server(src_root, {}, label="csp-hash") as srv:
+        _, _, headers = req(srv.port, "GET", "/")
+        csp = headers.get("Content-Security-Policy", "")
+        c.ok("預設模式用 sha256 雜湊", "sha256-" in csp and "'unsafe-inline'" not in csp,
+             csp[:160])
+    with Server(src_root, {"WISHPOOL_CSP": "unsafe-inline"}, label="csp-unsafe") as srv:
+        _, _, headers = req(srv.port, "GET", "/")
+        csp = headers.get("Content-Security-Policy", "")
+        c.ok("退路模式改成 unsafe-inline",
+             "'unsafe-inline'" in csp and "sha256-" not in csp and "default-src 'none'" in csp,
+             csp[:160])
+    with Server(src_root, {"WISHPOOL_CSP": "off"}, label="csp-off") as srv:
+        _, _, headers = req(srv.port, "GET", "/")
+        c.ok("off 模式完全不發 CSP 標頭",
+             "Content-Security-Policy" not in headers, repr(headers.get("Content-Security-Policy")))
+    with Server(src_root, {"WISHPOOL_CSP": "亂填的值"}, label="csp-bad") as srv:
+        _, _, headers = req(srv.port, "GET", "/")
+        csp = headers.get("Content-Security-Policy", "")
+        c.ok("亂填的值退回最嚴格的 hash,不是變成沒有 CSP", "sha256-" in csp, csp[:120])
+
+
 def suite_readonly(c, src_root):
     with Server(src_root, {"WISHPOOL_READONLY": 1}, label="readonly") as srv:
         p = srv.port
@@ -541,7 +569,7 @@ def read_db_text(db_path):
 def run_all(src_root):
     c = Checks()
     for suite in (suite_core, suite_rate_limit, suite_rate_limit_race, suite_rounds,
-                  suite_readonly, suite_admin_disabled):
+                  suite_csp_modes, suite_readonly, suite_admin_disabled):
         try:
             suite(c, src_root)
         except Exception as exc:  # 一節炸掉不要影響其他節,但要記成失敗
