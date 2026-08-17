@@ -16,15 +16,33 @@ button,input,textarea{font:inherit;color:inherit}
 /* ══ 色票 ══════════════════════════════════════════════════════════════
    對比度全部實測過(scripts/check_contrast.py 會在 CI 重驗)。
    改任何顏色之後跑一次那支腳本,--faint 最容易掉到 4.5:1 以下 —— 開發時
-   就在「--faint 疊在 --bg2 上」這一組掉過一次(4.46:1)。            */
+   就在「--faint 疊在 --bg2 上」這一組掉過一次(4.46:1)。
+
+   語意色(每個顏色代表一件事,不是拿來裝飾的):
+     --accent   水藍  = 可以按的東西(連結、按鈕、附議)
+     --c-aurora 極光紫 = 本輪聯署、倒數
+     --c-flare  焰橘  = 領先中
+     --good     綠   = 已實現
+     --warn     赭   = 錯誤
+   --chip-fg-N / --chip-bg-N 是 8 色標籤盤,由標籤名字雜湊決定,
+   所以同一個標籤永遠是同一個顏色。check_contrast.py 會自動掃出來逐對驗。  */
 :root{
   --bg:#F2F7F9; --bg2:#E4EEF2; --card:#FFFFFF;
   --ink:#0E2027; --soft:#33525E; --faint:#4F6B76;
   --rule:#CFE0E7; --line-strong:#5F8794;
   --accent:#0A6C87; --accent-ink:#FFFFFF; --focus:#0A6C87;
+  --c-aurora:#5B3FBF; --c-flare:#9A4A0C;
   --good:#17654A; --warn:#8A4A12;
-  --pool1:rgba(10,108,135,.10); --pool2:rgba(10,108,135,.06);
+  --pool1:rgba(10,108,135,.10); --pool2:rgba(91,63,191,.07);
   --shadow:0 1px 2px rgba(14,32,39,.06),0 8px 24px rgba(14,32,39,.05);
+  --chip-fg-0:hsl(195 74% 25%); --chip-bg-0:hsl(195 62% 93%);
+  --chip-fg-1:hsl(262 55% 42%); --chip-bg-1:hsl(262 70% 94%);
+  --chip-fg-2:hsl(330 60% 36%); --chip-bg-2:hsl(330 70% 94%);
+  --chip-fg-3:hsl(12 68% 38%);  --chip-bg-3:hsl(12 78% 93%);
+  --chip-fg-4:hsl(38 92% 26%);  --chip-bg-4:hsl(38 85% 90%);
+  --chip-fg-5:hsl(95 60% 24%);  --chip-bg-5:hsl(95 55% 90%);
+  --chip-fg-6:hsl(158 72% 24%); --chip-bg-6:hsl(158 55% 90%);
+  --chip-fg-7:hsl(222 62% 40%); --chip-bg-7:hsl(222 75% 94%);
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -32,30 +50,66 @@ button,input,textarea{font:inherit;color:inherit}
     --ink:#DEEAEF; --soft:#A2BCC5; --faint:#82A0AB;
     --rule:#1F3B47; --line-strong:#4E7D8C;
     --accent:#63CFE6; --accent-ink:#04222B; --focus:#63CFE6;
+    --c-aurora:#A78BFA; --c-flare:#F0A868;
     --good:#63D6A4; --warn:#E0A76A;
-    --pool1:rgba(99,207,230,.10); --pool2:rgba(99,207,230,.05);
+    --pool1:rgba(99,207,230,.10); --pool2:rgba(167,139,250,.07);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+    --chip-fg-0:hsl(195 70% 74%); --chip-bg-0:hsl(195 45% 17%);
+    --chip-fg-1:hsl(262 75% 80%); --chip-bg-1:hsl(262 35% 22%);
+    --chip-fg-2:hsl(330 70% 78%); --chip-bg-2:hsl(330 32% 21%);
+    --chip-fg-3:hsl(12 80% 74%);  --chip-bg-3:hsl(12 38% 20%);
+    --chip-fg-4:hsl(38 85% 68%);  --chip-bg-4:hsl(38 45% 17%);
+    --chip-fg-5:hsl(95 55% 70%);  --chip-bg-5:hsl(95 30% 16%);
+    --chip-fg-6:hsl(158 60% 68%); --chip-bg-6:hsl(158 38% 15%);
+    --chip-fg-7:hsl(222 80% 80%); --chip-bg-7:hsl(222 40% 22%);
   }
 }
 :root[data-theme=light]{
   --bg:#F2F7F9;--bg2:#E4EEF2;--card:#FFFFFF;--ink:#0E2027;--soft:#33525E;--faint:#4F6B76;
   --rule:#CFE0E7;--line-strong:#5F8794;--accent:#0A6C87;--accent-ink:#FFFFFF;--focus:#0A6C87;
-  --good:#17654A;--warn:#8A4A12;--pool1:rgba(10,108,135,.10);--pool2:rgba(10,108,135,.06);
+  --c-aurora:#5B3FBF;--c-flare:#9A4A0C;
+  --good:#17654A;--warn:#8A4A12;--pool1:rgba(10,108,135,.10);--pool2:rgba(91,63,191,.07);
   --shadow:0 1px 2px rgba(14,32,39,.06),0 8px 24px rgba(14,32,39,.05);
+  --chip-fg-0:hsl(195 74% 25%); --chip-bg-0:hsl(195 62% 93%);
+  --chip-fg-1:hsl(262 55% 42%); --chip-bg-1:hsl(262 70% 94%);
+  --chip-fg-2:hsl(330 60% 36%); --chip-bg-2:hsl(330 70% 94%);
+  --chip-fg-3:hsl(12 68% 38%);  --chip-bg-3:hsl(12 78% 93%);
+  --chip-fg-4:hsl(38 92% 26%);  --chip-bg-4:hsl(38 85% 90%);
+  --chip-fg-5:hsl(95 60% 24%);  --chip-bg-5:hsl(95 55% 90%);
+  --chip-fg-6:hsl(158 72% 24%); --chip-bg-6:hsl(158 55% 90%);
+  --chip-fg-7:hsl(222 62% 40%); --chip-bg-7:hsl(222 75% 94%);
 }
 :root[data-theme=dark]{
   --bg:#08161C;--bg2:#0D2028;--card:#112832;--ink:#DEEAEF;--soft:#A2BCC5;--faint:#82A0AB;
   --rule:#1F3B47;--line-strong:#4E7D8C;--accent:#63CFE6;--accent-ink:#04222B;--focus:#63CFE6;
-  --good:#63D6A4;--warn:#E0A76A;--pool1:rgba(99,207,230,.10);--pool2:rgba(99,207,230,.05);
+  --c-aurora:#A78BFA;--c-flare:#F0A868;
+  --good:#63D6A4;--warn:#E0A76A;--pool1:rgba(99,207,230,.10);--pool2:rgba(167,139,250,.07);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+  --chip-fg-0:hsl(195 70% 74%); --chip-bg-0:hsl(195 45% 17%);
+  --chip-fg-1:hsl(262 75% 80%); --chip-bg-1:hsl(262 35% 22%);
+  --chip-fg-2:hsl(330 70% 78%); --chip-bg-2:hsl(330 32% 21%);
+  --chip-fg-3:hsl(12 80% 74%);  --chip-bg-3:hsl(12 38% 20%);
+  --chip-fg-4:hsl(38 85% 68%);  --chip-bg-4:hsl(38 45% 17%);
+  --chip-fg-5:hsl(95 55% 70%);  --chip-bg-5:hsl(95 30% 16%);
+  --chip-fg-6:hsl(158 60% 68%); --chip-bg-6:hsl(158 38% 15%);
+  --chip-fg-7:hsl(222 80% 80%); --chip-bg-7:hsl(222 40% 22%);
 }
+/* 標籤色相:JS 依標籤名字雜湊指派 h0–h7,同名永遠同色 */
+.h0{--cf:var(--chip-fg-0);--cb:var(--chip-bg-0)}
+.h1{--cf:var(--chip-fg-1);--cb:var(--chip-bg-1)}
+.h2{--cf:var(--chip-fg-2);--cb:var(--chip-bg-2)}
+.h3{--cf:var(--chip-fg-3);--cb:var(--chip-bg-3)}
+.h4{--cf:var(--chip-fg-4);--cb:var(--chip-bg-4)}
+.h5{--cf:var(--chip-fg-5);--cb:var(--chip-bg-5)}
+.h6{--cf:var(--chip-fg-6);--cb:var(--chip-bg-6)}
+.h7{--cf:var(--chip-fg-7);--cb:var(--chip-bg-7)}
 
 /* ══ 版面 ══════════════════════════════════════════════════════════════ */
 body{
   background:var(--bg); color:var(--ink); min-height:100dvh;
   font-family:"PingFang TC","Heiti TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
-  font-size:16px; line-height:1.75; -webkit-text-size-adjust:100%;
-  padding:0 max(1rem,env(safe-area-inset-left)) calc(5.5rem + env(safe-area-inset-bottom));
+  font-size:16px; line-height:1.65; -webkit-text-size-adjust:100%;
+  padding:0 max(1rem,env(safe-area-inset-left)) calc(4.5rem + env(safe-area-inset-bottom));
   overflow-x:hidden;
 }
 body::before{
@@ -66,15 +120,24 @@ body::before{
 }
 .wrap{max-width:46rem;margin:0 auto}
 
-h1{font-size:clamp(1.75rem,6.5vw,2.5rem);line-height:1.2;font-weight:700;letter-spacing:-.01em}
+/* 標題走一條水藍→極光紫→焰橘的漸層。漸層兩端都是實測過的語意色,
+   而且瀏覽器不支援 background-clip:text 時會退回 --ink,不會變成看不見的字。*/
+h1{font-size:clamp(1.75rem,6.5vw,2.5rem);line-height:1.2;font-weight:700;letter-spacing:-.01em;
+   color:var(--ink);
+   background:linear-gradient(100deg,var(--accent) 0%,var(--c-aurora) 52%,var(--c-flare) 100%);
+   -webkit-background-clip:text;background-clip:text}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  h1{color:transparent}
+}
 h2{font-size:1.05rem;line-height:1.4;font-weight:600;margin:0}
 p{color:var(--soft)}
 .meta{font-size:.82rem;color:var(--faint);line-height:1.6}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
-header{padding:2rem 0 1rem;text-align:center}
-.tagline{margin:.55rem auto 0;max-width:32rem}
+header{padding:1.3rem 0 .6rem;text-align:center}
+.tagline{margin:.4rem auto 0;max-width:34rem}
 .tagline b{color:var(--ink)}
+.tagline b::before,.tagline b::after{content:' '}
 
 /* ══ 圖示 ══════════════════════════════════════════════════════════════
    全部是同文件內嵌 SVG symbol,沒有 emoji、沒有圖檔、沒有字型圖示。
@@ -88,12 +151,12 @@ header{padding:2rem 0 1rem;text-align:center}
 /* ══ 水池動畫 ══════════════════════════════════════════════════════════
    純 canvas,不載入任何素材。它是裝飾:aria-hidden、上面不放任何文字
    (文字疊在動畫上就沒辦法保證對比度)。                              */
-.pool-wrap{margin:1.15rem 0 0;border:1px solid var(--rule);border-radius:.8rem;
+.pool-wrap{margin:.8rem 0 0;border:1px solid var(--rule);border-radius:.8rem;
            overflow:hidden;background:var(--bg2);box-shadow:var(--shadow)}
-#pool{display:block;width:100%;height:clamp(92px,20vw,140px)}
+#pool{display:block;width:100%;height:clamp(76px,16vw,116px)}
 
 /* ══ 統計條 ════════════════════════════════════════════════════════════ */
-.stats{display:flex;gap:.5rem;justify-content:center;margin:1rem 0 0;flex-wrap:wrap}
+.stats{display:flex;gap:.5rem;justify-content:center;margin:.7rem 0 0;flex-wrap:wrap}
 .stat{background:var(--card);border:1px solid var(--rule);border-radius:.6rem;
       padding:.45rem .8rem;min-width:5.6rem;text-align:center;box-shadow:var(--shadow)}
 .stat b{display:block;font-size:1.15rem;line-height:1.3;font-variant-numeric:tabular-nums}
@@ -110,29 +173,34 @@ button,.btn{
 button:hover,.btn:hover{background:var(--bg2)}
 button:active,.btn:active{transform:translateY(1px)}
 button[disabled]{opacity:.55;cursor:not-allowed}
-.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
-.primary:hover{background:var(--accent);filter:brightness(1.08)}
+.primary{background:linear-gradient(100deg,var(--accent),var(--c-aurora));
+         color:var(--accent-ink);border-color:transparent;font-weight:600}
+.primary:hover{filter:brightness(1.08)}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:.4rem}
 a{color:var(--accent);text-underline-offset:.2em}
 
-.wish-cta{width:100%;margin:1.4rem 0 .2rem;font-size:1.05rem;min-height:52px}
+.wish-cta{width:100%;margin:1rem 0 .2rem;font-size:1.05rem;min-height:52px}
 
 /* ══ 本輪聯署 ══════════════════════════════════════════════════════════ */
-.round{background:var(--card);border:1px solid var(--accent);border-radius:.8rem;
-       padding:.9rem 1rem;margin:1.4rem 0 0;box-shadow:var(--shadow)}
+.round{background:var(--card);border:1px solid var(--c-aurora);border-radius:.8rem;
+       padding:.75rem 1rem .85rem;margin:1rem 0 0;box-shadow:var(--shadow);position:relative;
+       overflow:hidden}
+/* 頂上一條三色細帶:一眼認出這塊是「本輪聯署」 */
+.round::before{content:'';position:absolute;inset:0 0 auto 0;height:3px;
+  background:linear-gradient(90deg,var(--accent),var(--c-aurora) 55%,var(--c-flare))}
 .round[hidden]{display:none}
 .round-top{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
-.round-idx{font-weight:700;font-size:.95rem}
-.clock{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent);
+.round-idx{font-weight:700;font-size:.95rem;color:var(--c-aurora)}
+.clock{font-variant-numeric:tabular-nums;font-weight:700;color:var(--c-aurora);
        font-size:1.05rem;margin-left:auto}
-.clock.soon{color:var(--warn)}
+.clock.soon{color:var(--c-flare)}
 .leader{display:flex;gap:.55rem;align-items:center;margin:.6rem 0 0;padding:.35rem .7rem;
         background:var(--bg2);border-radius:.55rem;font-size:.92rem;flex-wrap:wrap}
-.leader .mark{flex:0 0 auto;color:var(--accent);display:flex;align-items:center}
+.leader .mark{flex:0 0 auto;color:var(--c-flare);display:flex;align-items:center}
 .leader .t{flex:1 1 10rem;min-width:0}
 /* 獨立連結一律撐到 44px:平板上是手指,不是滑鼠 */
 .leader a{font-weight:600;text-decoration:none;display:inline-flex;align-items:center;
-          min-height:44px}
+          min-height:44px;color:var(--c-flare)}
 .leader a:hover{text-decoration:underline}
 .leader .n{color:var(--faint);font-size:.82rem;white-space:nowrap}
 .round-rule{font-size:.82rem;color:var(--faint);margin:.5rem 0 0}
@@ -173,7 +241,7 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 
 /* ══ 工具列 ════════════════════════════════════════════════════════════ */
-.toolbar{margin:1.6rem 0 .9rem}
+.toolbar{margin:1.2rem 0 .7rem}
 .search{position:relative;display:flex;align-items:center}
 .search input{padding-left:2.4rem}
 .search .mag{position:absolute;left:.75rem;color:var(--faint);pointer-events:none;
@@ -184,17 +252,25 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
                                  border-color:var(--accent);font-weight:600}
 .tags-bar{display:flex;gap:.4rem;margin:.7rem 0 0;overflow-x:auto;padding-bottom:.2rem;
           -webkit-overflow-scrolling:touch;scrollbar-width:thin}
+/* 標籤鈕吃自己那個色相(class h0–h7 由 JS 依標籤名字指派)。
+   選中不是換色而是加一圈內描邊 —— 換色會讓「這個標籤是什麼顏色」失去意義。 */
 .tags-bar button{min-height:44px;padding:.3rem .8rem;font-size:.85rem;white-space:nowrap;
-                 border-radius:1.4rem}
-.tags-bar button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);
-                                    border-color:var(--accent)}
+                 border-radius:1.4rem;font-weight:600;border-color:transparent;
+                 background:var(--cb,var(--card));color:var(--cf,var(--ink))}
+.tags-bar button:hover{filter:brightness(.96)}
+.tags-bar button[aria-pressed=true]{box-shadow:inset 0 0 0 2px currentColor}
 
 /* ══ 願望卡 ════════════════════════════════════════════════════════════ */
 .list{list-style:none;margin:.6rem 0 0}
 .wish{display:flex;gap:.85rem;background:var(--card);border:1px solid var(--rule);
-      border-radius:.8rem;padding:.95rem;margin:0 0 .75rem;box-shadow:var(--shadow)}
+      border-radius:.8rem;padding:.85rem .9rem;margin:0 0 .6rem;box-shadow:var(--shadow);
+      animation:rise .38s ease-out backwards;animation-delay:calc(var(--i,0) * 45ms)}
+/* 本輪領先的那張卡:左緣一條焰橘,跟上面「目前領先」用同一個顏色 */
+.wish.is-leader{border-color:var(--c-flare);
+                box-shadow:inset 3px 0 0 var(--c-flare),var(--shadow)}
 .wish.flash{animation:flash 1.8s ease-out}
 @keyframes flash{0%{border-color:var(--accent);box-shadow:0 0 0 3px var(--pool1)}100%{}}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .vote{display:flex;flex-direction:column;align-items:center;justify-content:center;
       min-width:58px;min-height:62px;padding:.3rem;border-radius:.6rem;gap:.05rem;
       background:var(--bg);flex:0 0 auto}
@@ -206,6 +282,7 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 .wish-body h2{overflow-wrap:break-word}
 .detail{color:var(--soft);font-size:.94rem;margin:.35rem 0 0;white-space:pre-wrap;
         overflow-wrap:break-word}
+/* 4 行不是 3 行:截到 3 行會讓「剛好四行」的卡多長出一顆 44px 的展開鈕,反而更高 */
 .detail.clamped{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
                 overflow:hidden}
 .more{background:none;border:none;color:var(--accent);padding:.2rem 0;min-height:44px;
@@ -214,12 +291,14 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 .chips{display:flex;gap:.35rem;flex-wrap:wrap;margin:.5rem 0 0}
 /* 卡片上的標籤是**標示**不是按鈕:要篩選請用上面那排 44px 的標籤鈕。
    把它們做成 26px 高的小按鈕會多出二十幾個手指按不到的目標。       */
-.chip{font-size:.78rem;background:var(--bg2);border:1px solid var(--rule);border-radius:1rem;
-      padding:.1rem .55rem;color:var(--soft);display:inline-flex;align-items:center}
+.chip{font-size:.78rem;background:var(--cb,var(--bg2));border:1px solid transparent;
+      border-radius:1rem;padding:.1rem .55rem;color:var(--cf,var(--soft));font-weight:600;
+      display:inline-flex;align-items:center}
 .badge{font-size:.78rem;font-weight:700;border-radius:1rem;padding:.1rem .55rem;
        border:1px solid currentColor;display:inline-flex;align-items:center}
 .badge.granted{color:var(--good)}
-.badge.planned{color:var(--accent)}
+.badge.planned{color:var(--c-aurora)}
+.badge.leading{color:var(--c-flare)}
 .badge.declined{color:var(--faint)}
 .wish-foot{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.5rem 0 0}
 .granted-link{font-size:.86rem;font-weight:600;display:inline-flex;align-items:center;
@@ -247,9 +326,9 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 #theme{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));z-index:19;
        min-width:44px;padding:.5rem;border-radius:50%;box-shadow:var(--shadow)}
 
-footer{margin:2.6rem 0 0;padding:1.2rem 0 0;border-top:1px solid var(--rule);
+footer{margin:1.8rem 0 0;padding:.9rem 0 0;border-top:1px solid var(--rule);
        font-size:.86rem;color:var(--faint);text-align:center}
-footer p{color:var(--faint);font-size:.86rem;margin:.3rem 0 0}
+footer p{color:var(--faint);font-size:.86rem;margin:0}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -273,9 +352,8 @@ footer p{color:var(--faint);font-size:.86rem;margin:.3rem 0 0}
 
   <header>
     <h1>Skill 許願池</h1>
-    <p class="tagline">你想要什麼 AI skill?丟一個願望進池子,然後大家聯署。<br>
-      <b id="rule-line">每三天結算一次,票最高的那一個就會被做成 skill。</b><br>
-      不用註冊、不用登入。</p>
+    <p class="tagline">你想要什麼 AI skill?丟進池子,大家聯署。<b
+      id="rule-line">每三天結算一次,票最高的那一個就做成 skill。</b>不用註冊。</p>
 
     <div class="pool-wrap"><canvas id="pool" aria-hidden="true"></canvas></div>
 
@@ -356,10 +434,7 @@ footer p{color:var(--faint);font-size:.86rem;margin:.3rem 0 0}
   <button id="load-more" type="button" hidden>載入更多</button>
 
   <footer>
-    <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>
-      ・MIT 授權・可以自己架一個</p>
-    <p>不需要註冊,不放 cookie,不做追蹤。資料庫裡不存你的 IP,
-      只存加鹽雜湊用來認「一人一票」。</p>
+    <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>・MIT・可以自己架一個。不放 cookie、不追蹤,資料庫不存你的 IP,只存加鹽雜湊用來認一人一票。</p>
   </footer>
 </div>
 
@@ -418,16 +493,23 @@ const pool = (() => {
   const reduceQ = matchMedia('(prefers-reduced-motion: reduce)');
   const ripples = [], drops = [];
   let W = 0, H = 0, surface = 0, t = 0, raf = 0, last = 0, onScreen = true, tries = 0;
-  let rgb = [10, 108, 135];
-  const rgba = (a) => 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')';
+  // 水面用三個語意色調成極光:水藍 → 極光紫 → 焰橘,跟頁面其他地方同一套顏色。
+  let hues = [[10, 108, 135], [91, 63, 191], [154, 74, 12]];
+  const rgba = (i, a) => {
+    const c = hues[i % hues.length];
+    return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+  };
 
   function readTheme() {
-    const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue('--accent').trim().replace('#', '');
-    if (raw.length >= 6) {
-      const n = parseInt(raw.slice(0, 6), 16);
-      if (!isNaN(n)) rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-    }
+    const cs = getComputedStyle(document.documentElement);
+    hues = ['--accent', '--c-aurora', '--c-flare'].map((name, i) => {
+      const raw = cs.getPropertyValue(name).trim().replace('#', '');
+      if (raw.length >= 6) {
+        const n = parseInt(raw.slice(0, 6), 16);
+        if (!isNaN(n)) return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      }
+      return hues[i];
+    });
   }
 
   function resize() {
@@ -455,29 +537,40 @@ const pool = (() => {
     }
   }
 
-  function splash(x) {
-    ripples.push({ x, max: 26 + Math.random() * 32, life: 1.9, age: 0 });
-    ripples.push({ x, max: 12 + Math.random() * 14, life: 1.2, age: -0.18 });
+  function splash(x, hue) {
+    const c = hue == null ? Math.floor(Math.random() * 3) : hue;
+    ripples.push({ x, c, max: 26 + Math.random() * 32, life: 1.9, age: 0 });
+    ripples.push({ x, c, max: 12 + Math.random() * 14, life: 1.2, age: -0.18 });
     if (ripples.length > 30) ripples.splice(0, ripples.length - 30);
   }
 
-  function spawn(x01) {
+  function spawn(x01, hue) {
     if (!W) return;
     const x = Math.max(14, Math.min(W - 14,
       (x01 == null ? 0.12 + Math.random() * 0.76 : x01) * W));
-    drops.push({ x, y: -8, v: 95 + Math.random() * 70 });
+    drops.push({ x, y: -8, v: 95 + Math.random() * 70,
+                 c: hue == null ? Math.floor(Math.random() * 3) : hue });
     if (drops.length > 12) drops.shift();
+  }
+
+  function sweep(a0, a1, a2) {
+    const g = ctx.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, rgba(0, a0));
+    g.addColorStop(0.55, rgba(1, a1));
+    g.addColorStop(1, rgba(2, a2));
+    return g;
   }
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, rgba(0.055));
-    sky.addColorStop(1, rgba(0.015));
+    const sky = ctx.createLinearGradient(0, 0, W, H);
+    sky.addColorStop(0, rgba(0, 0.06));
+    sky.addColorStop(0.6, rgba(1, 0.05));
+    sky.addColorStop(1, rgba(2, 0.035));
     ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-    band(surface + 7, 4.5, 34, -1.05, 1.4, rgba(0.10), true);
-    band(surface, 5.5, 46, 0.75, 0, rgba(0.16), true);
+    band(surface + 7, 4.5, 34, -1.05, 1.4, sweep(0.09, 0.10, 0.08), true);
+    band(surface, 5.5, 46, 0.75, 0, sweep(0.17, 0.15, 0.12), true);
 
     for (const r of ripples) {
       const p = r.age / r.life;
@@ -485,17 +578,17 @@ const pool = (() => {
       const rr = Math.max(1, r.max * p);
       ctx.beginPath();
       ctx.ellipse(r.x, surface + 4, rr, Math.max(0.7, rr * 0.3), 0, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba((1 - p) * 0.55);
+      ctx.strokeStyle = rgba(r.c, (1 - p) * 0.6);
       ctx.lineWidth = 1.2; ctx.stroke();
     }
 
-    band(surface + 7, 4.5, 34, -1.05, 1.4, rgba(0.26), false);
-    band(surface, 5.5, 46, 0.75, 0, rgba(0.5), false);
+    band(surface + 7, 4.5, 34, -1.05, 1.4, sweep(0.24, 0.26, 0.22), false);
+    band(surface, 5.5, 46, 0.75, 0, sweep(0.5, 0.52, 0.44), false);
 
     for (const d of drops) {
       ctx.beginPath();
       ctx.ellipse(d.x, d.y, 2.5, 4.4, 0, 0, Math.PI * 2);
-      ctx.fillStyle = rgba(0.85); ctx.fill();
+      ctx.fillStyle = rgba(d.c, 0.9); ctx.fill();
     }
   }
 
@@ -504,7 +597,7 @@ const pool = (() => {
     last = now; t += dt;
     for (let i = drops.length - 1; i >= 0; i--) {
       drops[i].y += drops[i].v * dt;
-      if (drops[i].y >= surface) { splash(drops[i].x); drops.splice(i, 1); }
+      if (drops[i].y >= surface) { splash(drops[i].x, drops[i].c); drops.splice(i, 1); }
     }
     for (let i = ripples.length - 1; i >= 0; i--) {
       ripples[i].age += dt;
@@ -526,8 +619,9 @@ const pool = (() => {
   }
   function still() {
     t = 0.6; drops.length = 0; ripples.length = 0;
-    ripples.push({ x: W * 0.32, max: 34, life: 2, age: 1.1 });
-    ripples.push({ x: W * 0.68, max: 22, life: 2, age: 0.6 });
+    ripples.push({ x: W * 0.28, c: 0, max: 34, life: 2, age: 1.1 });
+    ripples.push({ x: W * 0.62, c: 1, max: 24, life: 2, age: 0.6 });
+    ripples.push({ x: W * 0.84, c: 2, max: 18, life: 2, age: 0.35 });
     draw();
   }
 
@@ -564,9 +658,9 @@ const pool = (() => {
   boot();
 
   return {
-    drop(x01) {
+    drop(x01, hue) {
       if (reduceQ.matches) { still(); return; }
-      spawn(x01);
+      spawn(x01, hue);
       start();
     },
     retheme() { readTheme(); if (reduceQ.matches) still(); else draw(); },
@@ -633,6 +727,23 @@ function ago(iso) {
 
 const STATUS_LABEL = { planned: '有人接了', granted: '已實現', declined: '暫不做' };
 
+/* 標籤 → 色相 h0–h7:用**名字**雜湊,所以同一個標籤在哪裡出現都是同一個顏色,
+   而且新增標籤不會讓整排顏色重排(照出現順序給色就會,使用者剛記住就變了)。 */
+function hueClass(tag) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return 'h' + (h % 8);
+}
+
+/* 本輪領先的那張卡加一條焰橘左緣。只加 class、不動內容,所以票數變動時
+   重打一次這個函式就同步,不用重抓整份列表。 */
+function markLeader() {
+  const id = state.round && state.round.leader ? 'w' + state.round.leader.id : null;
+  for (const li of document.querySelectorAll('#list .wish')) {
+    li.classList.toggle('is-leader', li.id === id);
+  }
+}
+
 /* ══ 本輪聯署 ═══════════════════════════════════════════════════════════ */
 function fmtLeft(sec) {
   if (sec <= 0) return '結算中…';
@@ -684,9 +795,8 @@ function renderRound() {
   }
 
   box.appendChild(el('p', { class: 'round-rule',
-    text: '規則:同一個來源一個願望只能附議一次。結算時票最高的出線(同票先許願的贏),'
-        + '出線的願望會標成「有人接了」並離開候選,下一輪換下一名。'
-        + '沒選上的票會留著繼續累積。' }));
+    text: '一人一票。結算時票最高的出線(同票先許願的贏),出線後離開候選,'
+        + '沒選上的票繼續累積到下一輪。' }));
 
   if (r.history && r.history.length) {
     const items = r.history.map((h) => {
@@ -748,6 +858,7 @@ async function refreshRound() {
     const data = await api('api/round');
     state.round = data.round;
     renderRound();
+    markLeader();      // 領先者可能換人了,左緣那條要跟著搬
     startClock();
   } catch (e) { /* 倒數不是核心功能,失敗就安靜跳過 */ }
 }
@@ -781,7 +892,8 @@ function renderTags() {
   all.addEventListener('click', () => setTag(''));
   bar.appendChild(all);
   for (const [tag, n] of top) {
-    const b = el('button', { type: 'button', text: '#' + tag + ' ' + n,
+    const b = el('button', { type: 'button', class: hueClass(tag),
+                             text: '#' + tag + ' ' + n,
                              'aria-pressed': state.tag === tag ? 'true' : 'false' });
     b.addEventListener('click', () => setTag(state.tag === tag ? '' : tag));
     bar.appendChild(b);
@@ -806,7 +918,7 @@ function card(w) {
 
   if (w.tags.length) {
     body.appendChild(el('div', { class: 'chips' },
-      w.tags.map((t) => el('span', { class: 'chip', text: '#' + t }))));
+      w.tags.map((t) => el('span', { class: 'chip ' + hueClass(t), text: '#' + t }))));
   }
 
   const foot = el('div', { class: 'wish-foot' }, [
@@ -858,8 +970,14 @@ function renderList(append) {
     ]));
   } else {
     const start = append ? list.querySelectorAll('.wish').length : 0;
-    for (const w of state.wishes.slice(start)) list.appendChild(card(w));
+    state.wishes.slice(start).forEach((w, i) => {
+      const li = card(w);
+      // 進場依序上浮,最多錯開 8 張(再多就變成在等畫面)
+      li.style.setProperty('--i', String(Math.min(i, 8)));
+      list.appendChild(li);
+    });
   }
+  markLeader();
   attachExpanders();
   $('load-more').hidden = state.wishes.length >= state.total;
   const hash = location.hash.match(/^#w(\d+)$/);
@@ -933,7 +1051,7 @@ async function doVote(w, btn) {
     if (!data.already_voted) {
       const s = $('s-votes');
       s.textContent = String((parseInt(s.textContent, 10) || 0) + 1);
-      pool.drop();          // 水面濺一下
+      pool.drop(null, 1);   // 附議 = 極光紫那一滴
       refreshRound();       // 領先者可能換人了
     }
   } catch (err) {
@@ -979,7 +1097,7 @@ async function submitWish(ev) {
       b.setAttribute('aria-pressed', b.dataset.sort === 'new' ? 'true' : 'false');
     }
     location.hash = 'w' + data.wish.id;
-    pool.drop(0.5);
+    pool.drop(0.5, 2);      // 新願望 = 焰橘那一滴,從正中央落下
     await load(false);
     refreshRound();
     toast(data.merged ? (data.message || '有人許過一樣的願了,幫你加上一票。')

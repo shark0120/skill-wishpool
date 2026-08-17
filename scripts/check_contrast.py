@@ -47,22 +47,59 @@ PAIRS = [
     ("line-strong", "bg", 3.0, "輸入框邊框在背景上"),
     ("focus", "bg", 3.0, "焦點外框"),
     ("focus", "card", 3.0, "焦點外框在卡片上"),
+    # 語意色:每個顏色代表一件事,不是裝飾。所以每一個都要真的讀得到。
+    ("c-aurora", "card", 4.5, "本輪聯署(極光紫)"),
+    ("c-aurora", "bg", 4.5, "本輪聯署在背景上"),
+    ("c-aurora", "bg2", 4.5, "本輪聯署在次要底色上"),
+    ("c-flare", "card", 4.5, "領先中(焰橘)"),
+    ("c-flare", "bg", 4.5, "領先中在背景上"),
+    ("c-flare", "bg2", 4.5, "領先中在次要底色上"),
+    # 主要按鈕是水藍→極光紫的漸層。腳本量不到漸層,所以改成驗**兩個端點**:
+    # 兩端都過,中間的插值就一定過。
+    ("accent-ink", "c-aurora", 4.5, "主要按鈕的字(漸層另一端)"),
 ]
 
-TOKEN_RE = re.compile(r"--([a-z0-9-]+)\s*:\s*(#[0-9A-Fa-f]{3,8})")
+# 標籤配色:8 個色相,由標籤名字雜湊決定,所以同一個標籤永遠同一個顏色。
+# 這些 token 是成對的 --chip-fg-N / --chip-bg-N,下面會自動掃出來逐對驗證 ——
+# 以後加色相不用改這支腳本,但也逃不掉檢查。
+CHIP_RE = re.compile(r"^chip-fg-(\d+)$")
+
+# 色票可以寫 #hex 或 hsl(H S% L%) —— 標籤配色用 hsl 比較好讀,一眼看得出色相在轉。
+TOKEN_RE = re.compile(
+    r"--([a-z0-9-]+)\s*:\s*(#[0-9A-Fa-f]{3,8}|hsl\(\s*[\d.]+\s+[\d.]+%\s+[\d.]+%\s*\))")
+HSL_RE = re.compile(r"hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)")
 
 
 def srgb_to_lin(channel: float) -> float:
     return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
 
-def luminance(hex_color: str) -> float:
-    h = hex_color.lstrip("#")
+def hsl_to_rgb(h: float, s: float, lightness: float):
+    """跟瀏覽器算的是同一條公式,所以量到的就是使用者看到的。"""
+    s, lightness = s / 100.0, lightness / 100.0
+    c = (1 - abs(2 * lightness - 1)) * s
+    hp = (h % 360) / 60.0
+    x = c * (1 - abs(hp % 2 - 1))
+    rgb = [(c, x, 0), (x, c, 0), (0, c, x),
+           (0, x, c), (x, 0, c), (c, 0, x)][int(hp) % 6]
+    m = lightness - c / 2
+    return tuple(v + m for v in rgb)
+
+
+def to_rgb(value: str):
+    m = HSL_RE.fullmatch(value.strip())
+    if m:
+        return hsl_to_rgb(float(m.group(1)), float(m.group(2)), float(m.group(3)))
+    h = value.strip().lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
     if len(h) not in (6, 8):
-        raise ValueError("看不懂的顏色:" + hex_color)
-    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+        raise ValueError("看不懂的顏色:" + value)
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def luminance(value: str) -> float:
+    r, g, b = to_rgb(value)
     return (0.2126 * srgb_to_lin(r) + 0.7152 * srgb_to_lin(g) + 0.0722 * srgb_to_lin(b))
 
 
@@ -133,7 +170,14 @@ def main() -> int:
     failures = []
     checked = 0
     for theme, tokens in themes.items():
-        for fg, bg, floor, label in PAIRS:
+        chips = sorted(int(CHIP_RE.match(k).group(1))
+                       for k in tokens if CHIP_RE.match(k))
+        if not chips:
+            failures.append("%s:找不到任何 --chip-fg-N 標籤配色" % theme)
+        pairs = list(PAIRS) + [
+            ("chip-fg-%d" % n, "chip-bg-%d" % n, 4.5, "標籤配色 #%d" % n) for n in chips
+        ]
+        for fg, bg, floor, label in pairs:
             if fg not in tokens or bg not in tokens:
                 failures.append("%s:色票 --%s 或 --%s 不存在" % (theme, fg, bg))
                 continue
