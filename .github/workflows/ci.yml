@@ -24,10 +24,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: 零依賴檢查
+      - name: 後端零依賴檢查
         run: |
-          test ! -f requirements.txt || (echo "這個專案不該有 requirements.txt" && exit 1)
-          test ! -f package.json || (echo "這個專案不該有 package.json" && exit 1)
+          # 後端仍然只用標準函式庫:伺服器上不該需要 pip install 任何東西。
+          # (前端的動畫引擎走 npm,但那是**建置時**的事,見 build 這個 job。)
+          test ! -f requirements.txt || (echo "後端不該有 requirements.txt" && exit 1)
+          grep -qE '^\s*import (animejs|lenis)' server.py && exit 1 || true
 
       - name: 語法檢查
         run: |
@@ -41,6 +43,41 @@ jobs:
 
       - name: 反向對照(拆掉防護,測試必須變紅)
         run: python scripts/selftest.py --verify-gauge
+
+  build:
+    # 前端動畫引擎是 npm 依賴,在**建置時**用 esbuild 打包並內嵌進 public/index.html。
+    # 這個 job 證明版控裡那份 HTML 真的是從 src/vendor.js 建出來的,沒有人手改過
+    # vendor 區塊、也沒有偷塞東西進去。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: npm ci
+
+      - name: 重新打包並比對
+        run: |
+          npx esbuild src/vendor.js --bundle --minify --format=iife \
+            --target=es2020 --outfile=build/vendor.min.js
+          python scripts/build.py --check
+
+      - name: 執行時不准有外部請求
+        run: |
+          # 打包的意義就是使用者的瀏覽器不連外。出現任何 CDN 網址就失敗。
+          ! grep -nE '//(cdn\.|unpkg\.com|.*jsdelivr|esm\.sh|fonts\.googleapis)' public/index.html
+
+      - name: 授權清單要跟得上依賴
+        run: |
+          for pkg in $(node -p "Object.keys(require('./package.json').dependencies).join(' ')"); do
+            grep -q "$pkg" THIRD-PARTY.md || {
+              echo "依賴 $pkg 沒有列進 THIRD-PARTY.md"; exit 1; }
+          done
+          echo "所有執行時依賴都有署名。"
 
   static-export:
     runs-on: ubuntu-latest

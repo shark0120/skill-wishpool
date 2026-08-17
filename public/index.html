@@ -12,6 +12,8 @@
 *{margin:0;padding:0;box-sizing:border-box}
 img,svg{max-width:100%}
 button,input,textarea{font:inherit;color:inherit}
+/* 流動字級:所有 rem 尺寸跟著視窗長大。下限鎖 16px,再小 iOS 會自己放大整頁。 */
+html{font-size:clamp(16px,0.94rem + 0.22vw,17.5px)}
 
 /* ══ 色票 ══════════════════════════════════════════════════════════════
    對比度全部實測過(scripts/check_contrast.py 會在 CI 重驗)。
@@ -112,13 +114,42 @@ body{
   padding:0 max(1rem,env(safe-area-inset-left)) calc(4.5rem + env(safe-area-inset-bottom));
   overflow-x:hidden;
 }
+/* 背景的靜態漸層留著當底,上面再疊會動的 #bg-blobs */
 body::before{
-  content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  content:''; position:fixed; inset:0; z-index:-2; pointer-events:none;
   background:
     radial-gradient(58rem 26rem at 50% -10rem, var(--pool1), transparent 70%),
     radial-gradient(36rem 20rem at 8% 6rem, var(--pool2), transparent 70%);
 }
 .wrap{max-width:46rem;margin:0 auto}
+
+/* ══ 超高響應式 ════════════════════════════════════════════════════════
+   320px 到 1600px 都要好看,而且不是靠「桌機縮小版」蒙混:
+     手機   直向單欄(DOM 原始順序)
+     ≥60rem 釘住的側欄 + 主欄
+     ≥80rem 主欄再拆成兩欄願望卡
+   字級用 root 的 clamp 一起流動,所有 rem 尺寸自動跟著長大,
+   但下限鎖在 16px —— 再小 iOS 聚焦輸入框時會自己放大整頁。            */
+@media (min-width:60rem){
+  .wrap{max-width:74rem}
+  .shell{display:grid;grid-template-columns:23rem minmax(0,1fr);gap:1.8rem;
+         align-items:start}
+  .rail{position:sticky;top:1.1rem;display:flex;flex-direction:column;gap:0}
+  .rail .round{margin-top:0}
+  .toolbar{margin-top:0}
+  header{padding:2.4rem 0 1.2rem}
+  #pool{height:clamp(110px,11vw,160px)}
+}
+@media (min-width:80rem){
+  .wrap{max-width:88rem}
+  .list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:0 .8rem;align-items:start}
+  .list .empty,.list .skeleton:first-child{grid-column:1 / -1}
+}
+@media (min-width:110rem){
+  .wrap{max-width:104rem}
+  .list{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
 
 /* 標題走一條水藍→極光紫→焰橘的漸層。漸層兩端都是實測過的語意色,
    而且瀏覽器不支援 background-clip:text 時會退回 --ink,不會變成看不見的字。*/
@@ -263,8 +294,9 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 /* ══ 願望卡 ════════════════════════════════════════════════════════════ */
 .list{list-style:none;margin:.6rem 0 0}
 .wish{display:flex;gap:.85rem;background:var(--card);border:1px solid var(--rule);
-      border-radius:.8rem;padding:.85rem .9rem;margin:0 0 .6rem;box-shadow:var(--shadow);
-      animation:rise .38s ease-out backwards;animation-delay:calc(var(--i,0) * 45ms)}
+      border-radius:.8rem;padding:.85rem .9rem;margin:0 0 .6rem;box-shadow:var(--shadow)}
+/* 進場交給 anime.js(見 MOTION.reveal)。這裡**不放** CSS 進場動畫:兩邊同時
+   animate opacity 會打架,而且 CSS 版若用 opacity:0 起手,JS 一掛就變空白列表。 */
 /* 本輪領先的那張卡:左緣一條焰橘,跟上面「目前領先」用同一個顏色 */
 .wish.is-leader{border-color:var(--c-flare);
                 box-shadow:inset 3px 0 0 var(--c-flare),var(--shadow)}
@@ -326,11 +358,102 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 #theme{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));z-index:19;
        min-width:44px;padding:.5rem;border-radius:50%;box-shadow:var(--shadow)}
 
+/* ══ 致謝 ══════════════════════════════════════════════════════════════
+   只是一個外連,不是嵌入式外掛 —— 頁面仍然零外部請求(不會去 FB 拿任何東西)。*/
+.thanks{margin:2rem 0 0;padding:1.4rem 1.2rem;text-align:center;position:relative;
+  border:1.5px solid transparent;border-radius:2rem .6rem 2rem .6rem;
+  background:linear-gradient(var(--card),var(--card)) padding-box,
+             linear-gradient(115deg,var(--c-flare),var(--c-aurora) 55%,var(--accent)) border-box;
+  box-shadow:var(--shadow);overflow:hidden}
+.thanks::before{content:'';position:absolute;inset:-40% -10% auto;height:180%;
+  pointer-events:none;
+  background:radial-gradient(closest-side,var(--pool2),transparent 70%)}
+.thanks-label{font-size:.8rem;letter-spacing:.42em;text-indent:.42em;text-transform:uppercase;
+  color:var(--c-flare);font-weight:700;margin:0}
+.thanks-name{font-size:clamp(1.2rem,3.6vw,1.6rem);font-weight:700;color:var(--ink);
+  margin:.35rem 0 0;line-height:1.3}
+.thanks-note{font-size:.9rem;color:var(--soft);margin:.4rem auto 0;max-width:26rem}
+.thanks-link{margin:.9rem auto 0;border-radius:1.4rem .4rem 1.4rem .4rem;
+  border-color:var(--rule);font-weight:600}
+.thanks-link:hover{border-color:var(--c-flare);color:var(--c-flare)}
+
 footer{margin:1.8rem 0 0;padding:.9rem 0 0;border-top:1px solid var(--rule);
        font-size:.86rem;color:var(--faint);text-align:center}
 footer p{color:var(--faint);font-size:.86rem;margin:0}
 
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* ══ 打破常規形狀 ══════════════════════════════════════════════════════
+   規矩:形狀可以亂,**命中區不准縮**。所有異形都只動視覺,可點範圍仍是
+   ≥44px 的方框;文字一律不疊在會動的東西上,不然對比沒辦法保證。        */
+
+/* 水池:下緣用同文件的 SVG clipPath 切成波浪,不是矩形框 */
+.pool-wrap{clip-path:url(#wave-clip);border:none;border-radius:1.4rem 1.4rem 0 0;
+           background:transparent;box-shadow:none}
+
+/* 附議鈕:有機水滴形。
+   刻意**不做**持續變形的 border-radius 動畫 —— 那是每一幀重繪,列表上有幾張卡
+   就有幾個在燒 CPU(實測 12 張卡 = 12 個無限重繪動畫)。形狀本身已經夠不規則,
+   動感留給按下去那一下(MOTION.press,只動 transform)。 */
+.vote{border-radius:52% 48% 46% 54% / 58% 60% 40% 42%}
+.vote[aria-pressed=true]{border-radius:46% 54% 52% 48% / 52% 56% 44% 48%}
+
+/* 願望卡:左右交錯的不對稱圓角,一排看下去不再是同一個模子 */
+.list .wish:nth-child(odd){border-radius:1.5rem .45rem 1.5rem .45rem}
+.list .wish:nth-child(even){border-radius:.45rem 1.5rem .45rem 1.5rem}
+
+/* 標籤:斜角膠囊 */
+.chip,.tags-bar button{border-radius:1.1rem .35rem 1.1rem .35rem}
+
+/* 聯署框:會轉的三色漸層描邊。@property 讓角度可以被動畫,
+   不支援的瀏覽器角度不轉但漸層still在,不會變成沒有邊框。 */
+@property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
+.round{border:1.5px solid transparent;border-radius:1.6rem .5rem 1.6rem .5rem;
+  background:linear-gradient(var(--card),var(--card)) padding-box,
+             conic-gradient(from var(--ang),var(--accent),var(--c-aurora) 40%,
+                            var(--c-flare) 65%,var(--accent)) border-box;
+  animation:spin-border 9s linear infinite}
+@keyframes spin-border{to{--ang:360deg}}
+.round::before{background:none}
+
+/* 主要按鈕:斜角 + 掃光 */
+.wish-cta,.compose-actions .primary{border-radius:1.4rem .45rem 1.4rem .45rem;
+  position:relative;overflow:hidden}
+.wish-cta::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);
+  transform:translateX(-120%);animation:sheen 4.5s ease-in-out infinite}
+@keyframes sheen{0%,55%{transform:translateX(-120%)}85%,100%{transform:translateX(120%)}}
+
+/* 背景:兩團緩慢變形的極光,取代原本的靜態徑向漸層 */
+#bg-blobs{position:fixed;inset:0;z-index:-1;pointer-events:none;width:100%;height:100%;
+          filter:blur(2px)}
+#blob-a{fill:var(--accent);opacity:.12}
+#blob-b{fill:var(--c-aurora);opacity:.11}
+
+.list .wish{will-change:transform,opacity}
+
+/* ══ 有滑鼠才給的手感 ══════════════════════════════════════════════════
+   用 hover:hover 隔離 —— 觸控裝置套 hover 會變成「按一下先觸發 hover
+   再觸發 click」的黏滯感。只動 transform 與 box-shadow。              */
+@media (hover:hover) and (pointer:fine){
+  .wish{transition:transform .2s cubic-bezier(.2,.7,.3,1),box-shadow .2s ease}
+  .wish:hover{transform:translateY(-3px)}
+  .wish:hover .vote{transform:scale(1.06)}
+  .vote{transition:transform .2s cubic-bezier(.2,.7,.3,1)}
+  .stat{transition:transform .2s ease}
+  .stat:hover{transform:translateY(-2px)}
+  .thanks-link{transition:transform .2s ease,border-color .2s ease,color .2s ease}
+  .thanks-link:hover{transform:translateY(-2px)}
+  .tags-bar button{transition:transform .16s ease,filter .16s ease}
+  .tags-bar button:hover{transform:translateY(-2px)}
+}
+
+/* ══ 尊重系統設定:整套停下來變靜態,不是變慢 ═════════════════════════ */
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .vote{border-radius:52% 48% 46% 54% / 58% 60% 40% 42%}
+  .round{border-color:var(--c-aurora);background:var(--card)}
+  .wish-cta::after{display:none}
+  #bg-blobs{display:none}
+}
 </style>
 </head>
 <body>
@@ -346,7 +469,18 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
   <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.4L3.2 19.6h17.6z"/><path d="M12 9.6v4.2"/><path d="M12 16.6h.01"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M13.5 5H19v5.5"/><path d="M19 5l-7.5 7.5"/><path d="M18 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V7.5A1.5 1.5 0 0 1 6 6h4.5"/></symbol>
   <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6a8.4 8.4 0 0 1 0 16.8z" fill="currentColor" stroke="none"/></symbol>
+  <!-- 水池的波浪下緣。objectBoundingBox 讓它跟著容器縮放,不用寫死尺寸。 -->
+  <clipPath id="wave-clip" clipPathUnits="objectBoundingBox">
+    <path d="M0,0 H1 V0.80 C0.86,0.96 0.73,0.70 0.5,0.86 C0.27,1.02 0.14,0.76 0,0.92 Z"/>
+  </clipPath>
 </defs></svg>
+
+<!-- 背景的兩團極光。純裝飾、aria-hidden、上面不放任何文字。 -->
+<svg id="bg-blobs" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"
+     xmlns="http://www.w3.org/2000/svg">
+  <path id="blob-a" d="M25,0 C41,0 52,13 52,27 C52,41 41,52 25,52 C9,52 0,41 0,27 C0,13 9,0 25,0 Z"/>
+  <path id="blob-b" d="M78,45 C96,45 108,58 108,74 C108,90 96,102 78,102 C60,102 50,90 50,74 C50,58 60,45 78,45 Z"/>
+</svg>
 
 <div class="wrap">
 
@@ -364,6 +498,10 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
     </div>
   </header>
 
+  <!-- 手機是單純的直向流,桌機才會變成「釘住的側欄 + 主欄」。
+       DOM 順序刻意維持成手機的閱讀順序,所以鍵盤與螢幕閱讀器的順序在兩邊都對。 -->
+  <div class="shell">
+  <div class="rail">
   <section class="round" id="round" hidden aria-label="本輪聯署"></section>
 
   <div id="mode-notice"></div>
@@ -408,7 +546,9 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
     </div>
     <strong class="err" id="e-form"></strong>
   </form>
+  </div><!-- /rail -->
 
+  <div class="main">
   <section class="toolbar" aria-label="篩選與排序">
     <div class="search">
       <span class="mag" aria-hidden="true">
@@ -432,6 +572,17 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
   </ul>
 
   <button id="load-more" type="button" hidden>載入更多</button>
+  </div><!-- /main -->
+  </div><!-- /shell -->
+
+  <section class="thanks" aria-labelledby="thanks-h">
+    <p class="thanks-label" id="thanks-h">特別感謝</p>
+    <p class="thanks-name">我的設計老師</p>
+    <p class="thanks-note">這個站的視覺方向、配色節奏與版面手感,是跟他學的。</p>
+    <a class="btn thanks-link" href="https://www.facebook.com/yan.shi.lun.933337/"
+       target="_blank" rel="noopener noreferrer">到老師的 Facebook<svg class="i"
+       aria-hidden="true"><use href="#i-link"/></svg></a>
+  </section>
 
   <footer>
     <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>・MIT・可以自己架一個。不放 cookie、不追蹤,資料庫不存你的 IP,只存加鹽雜湊用來認一人一票。</p>
@@ -442,6 +593,113 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
 <button id="theme" type="button" aria-label="切換亮暗模式">
   <svg class="i" aria-hidden="true"><use href="#i-theme"/></svg></button>
 
+<!-- vendor:start 由 scripts/build.py 產生,不要手改 -->
+<script>/* anime.js + lenis,由 esbuild 打包 · 見 THIRD-PARTY.md · sha256:43b7f992065c */
+(()=>{var Zs=Object.defineProperty;var ho=(t,e,s)=>e in t?Zs(t,e,{enumerable:!0,configurable:!0,writable:!0,value:s}):t[e]=s;var Js=(t,e)=>{for(var s in e)Zs(t,s,{get:e[s],enumerable:!0})};var g=(t,e,s)=>ho(t,typeof e!="symbol"?e+"":e,s);var Ut=typeof window<"u",Ke=Ut?window:null,ae=Ut?document:null,V={OBJECT:0,ATTRIBUTE:1,CSS:2,TRANSFORM:3,CSS_VAR:4},S={NUMBER:0,UNIT:1,COLOR:2,COMPLEX:3},ot={NONE:0,AUTO:1,FORCE:2},H={replace:0,none:1,blend:2},xs=Symbol(),$t=Symbol(),Ge=Symbol(),le=Symbol(),Ks=Symbol(),b=1e-11,Me=1e12,Yt=1e3,Le=240,kt="",Gs="var(",Ve=[],je=(()=>{let t=new Map;return t.set("x","translateX"),t.set("y","translateY"),t.set("z","translateZ"),t})(),be=["perspective","translateX","translateY","translateZ","rotate","rotateX","rotateY","rotateZ","scale","scaleX","scaleY","scaleZ","skew","skewX","skewY"],js=be.reduce((t,e)=>({...t,[e]:e+"("}),{}),tt=()=>{},Qs=t=>t,ti=/\)\s*[-.\d]/,ei=/(^#([\da-f]{3}){1,2}$)|(^#([\da-f]{4}){1,2}$)/i,si=/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i,ii=/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?\d+|-?\d*.\d+)\s*\)/i,oi=/hsl\(\s*(-?\d+|-?\d*.\d+)\s*,\s*(-?\d+|-?\d*.\d+)%\s*,\s*(-?\d+|-?\d*.\d+)%\s*\)/i,ri=/hsla\(\s*(-?\d+|-?\d*.\d+)\s*,\s*(-?\d+|-?\d*.\d+)%\s*,\s*(-?\d+|-?\d*.\d+)%\s*,\s*(-?\d+|-?\d*.\d+)\s*\)/i,ws=/[-+]?\d*\.?\d+(?:e[-+]?\d)?/gi,Qe=/^([-+]?\d*\.?\d+(?:e[-+]?\d+)?)([a-z]+|%)$/i,ni=/([a-z])([A-Z])/g,ai=/(\*=|\+=|-=)/,li=/var\(\s*(--[\w-]+)(?:\s*,\s*([^)]+))?\s*\)/;var xe={id:null,keyframes:null,playbackEase:null,playbackRate:1,frameRate:Le,loop:0,reversed:!1,alternate:!1,autoplay:!0,persist:!1,duration:Yt,delay:0,loopDelay:0,ease:"out(2)",composition:H.replace,modifier:Qs,onBegin:tt,onBeforeUpdate:tt,onUpdate:tt,onLoop:tt,onPause:tt,onComplete:tt,onRender:tt},Ue={current:null,root:ae},y={defaults:xe,precision:4,timeScale:1,tickThreshold:200,editor:null},Rs={version:"4.5.0",engine:null};Ut&&(Ke.AnimeJS||(Ke.AnimeJS=[]),Ke.AnimeJS.push(Rs));var Cs=t=>t.replace(ni,"$1-$2").toLowerCase(),It=(t,e)=>t.indexOf(e)===0,Qt=Date.now,Mt=Array.isArray,pe=t=>t&&t.constructor===Object,Rt=t=>typeof t=="number"&&!isNaN(t),Et=t=>typeof t=="string",mt=t=>typeof t=="function",_=t=>typeof t>"u",qt=t=>_(t)||t===null,ts=t=>Ut&&t instanceof SVGElement,Ns=t=>ei.test(t),As=t=>It(t,"rgb"),Ds=t=>It(t,"hsl"),ci=t=>Ns(t)||(As(t)||Ds(t))&&(t[t.length-1]===")"||!ti.test(t)),ke=t=>!y.defaults.hasOwnProperty(t),fo=["opacity","rotate","overflow","color"],ui=(t,e)=>{if(fo.includes(e))return!1;if(t.getAttribute(e)||e in t){if(e==="scale"){let s=t.parentNode;return s&&s.tagName==="filter"}return!0}},es=t=>Et(t)?parseFloat(t):t,ge=Math.pow,Fe=Math.sqrt,hi=Math.sin,di=Math.cos,me=Math.abs;var _e=Math.floor,fi=Math.asin;var ze=Math.PI,Es=Math.round,_t=(t,e,s)=>t<e?e:t>s?s:t,C=(t,e)=>{if(e<0)return t;if(!e)return Es(t);let s=10**e;return Es(t*s)/s},mi=(t,e)=>Mt(e)?e.reduce((s,i)=>me(i-t)<me(s-t)?i:s):e?Es(t/e)*e:t,te=(t,e,s)=>s===1?e:s===0?t:t+(e-t)*s,Te=t=>t===1/0?Me:t===-1/0?-Me:t,ee=t=>t<=b?b:Te(C(t,11)),et=t=>Mt(t)?[...t]:t,ss=(t,e)=>{let s={...t};for(let i in e){let o=t[i];s[i]=_(o)?e[i]:o}return s},N=(t,e,s,i="_prev",o="_next")=>{let r=t._head,n=o;for(s&&(r=t._tail,n=i);r;){let a=r[n];e(r),r=a}},Lt=(t,e,s="_prev",i="_next")=>{let o=e[s],r=e[i];o?o[i]=r:t._head=r,r?r[s]=o:t._tail=o,e[s]=null,e[i]=null},Ct=(t,e,s,i="_prev",o="_next")=>{let r=t._tail;for(;r&&s&&s(r,e);)r=r[i];let n=r?r[o]:t._head;r?r[o]=e:t._head=e,n?n[i]=e:t._tail=e,e[i]=r,e[o]=n};var pi=(t,e,s)=>{let i=t.style.transform;if(i){let o=t[le],r=0,n=i.length,a;for(;r<n;){for(;r<n&&i.charCodeAt(r)===32;)r++;if(r>=n)break;let c=r;for(;r<n&&i.charCodeAt(r)!==40;)r++;if(r>=n)break;let h=i.substring(c,r),d=1,u=r+1,m=-1,f=-1;for(r++;r<n&&d>0;){let I=i.charCodeAt(r);I===40?d++:I===41?d--:I===44&&d===1&&(m===-1?m=r:f===-1&&(f=r)),r++}let T=r-1;h==="translate"||h==="translate3d"?(m===-1?o.translateX=i.substring(u,T).trim():(o.translateX=i.substring(u,m).trim(),f===-1?o.translateY=i.substring(m+1,T).trim():(o.translateY=i.substring(m+1,f).trim(),o.translateZ=i.substring(f+1,T).trim())),a=i.substring(u,T)):h==="scale"||h==="scale3d"?m===-1?o.scale=i.substring(u,T).trim():(o.scaleX=i.substring(u,m).trim(),f===-1?o.scaleY=i.substring(m+1,T).trim():(o.scaleY=i.substring(m+1,f).trim(),o.scaleZ=i.substring(f+1,T).trim())):o[h]=i.substring(u,T)}if(e==="translate3d"&&a)return s&&(s[e]=a),a;let l=o[e];if(!_(l))return s&&(s[e]=l),l}return e==="translate3d"?"0px, 0px, 0px":e==="rotate3d"?"0, 0, 0, 0deg":It(e,"scale")?"1":It(e,"rotate")||It(e,"skew")?"0deg":"0px"},is=t=>{let e=kt;for(let s=0,i=be.length;s<i;s++){let o=be[s],r=t[o];if(r!==void 0){if(o==="translateX"){let n=t.translateY;if(n!==void 0){let a=t.translateZ;a!==void 0?(e+=`translate3d(${r},${n},${a}) `,s+=2):(e+=`translate(${r},${n}) `,s+=1);continue}}if(o==="scaleX"&&t.scale===void 0){let n=t.scaleY;if(n!==void 0){let a=t.scaleZ;a!==void 0?(e+=`scale3d(${r},${n},${a}) `,s+=2):(e+=`scale(${r},${n}) `,s+=1);continue}}e+=`${js[o]}${r}) `}o==="rotateZ"&&t.rotate3d!==void 0&&(e+=`rotate3d(${t.rotate3d}) `)}return t.matrix!==void 0&&(e+=`matrix(${t.matrix}) `),t.matrix3d!==void 0&&(e+=`matrix3d(${t.matrix3d}) `),e};var Ps=[];function os(t,e){if(!t)return null;let s=Ps.length;t:for(let i=0;i<s;i++){let o=Ps[i];if(o.detect&&!o.detect(t))continue;let r=o.targetAdapters;for(let n=0,a=r.length;n<a;n++){let l=r[n];if(l.detect(t)){let c=l.props[e];if(c&&(!c.gate||c.gate(t)))return c;break t}}}for(let i=0;i<s;i++){let o=Ps[i];if(o.detect&&!o.detect(t))continue;let r=o.propertyResolvers;for(let n=0,a=r.length;n<a;n++){let l=r[n](t,e);if(l)return l}}return null}var mo=t=>{let e=si.exec(t)||ii.exec(t),s=_(e[4])?1:+e[4];return[+e[1],+e[2],+e[3],s]},po=t=>{let e=t.length,s=e===4||e===5;return[+("0x"+t[1]+t[s?1:2]),+("0x"+t[s?2:3]+t[s?2:4]),+("0x"+t[s?3:5]+t[s?3:6]),e===5||e===9?+(+("0x"+t[s?4:7]+t[s?4:8])/255).toFixed(3):1]},Os=(t,e,s)=>(s<0&&(s+=1),s>1&&(s-=1),s<1/6?t+(e-t)*6*s:s<1/2?e:s<2/3?t+(e-t)*(2/3-s)*6:t),go=t=>{let e=oi.exec(t)||ri.exec(t),s=+e[1]/360,i=+e[2]/100,o=+e[3]/100,r=_(e[4])?1:+e[4],n,a,l;if(i===0)n=a=l=o;else{let c=o<.5?o*(1+i):o+i-o*i,h=2*o-c;n=C(Os(h,c,s+1/3)*255,0),a=C(Os(h,c,s)*255,0),l=C(Os(h,c,s-1/3)*255,0)}return[n,a,l,r]},gi=t=>As(t)?mo(t):Ns(t)?po(t):Ds(t)?go(t):[0,0,0,1];var X=(t,e)=>_(t)?e:t,_i=(t,e)=>{let s=t.match(li),i=e[$t]?e:document.documentElement,o=getComputedStyle(i)?.getPropertyValue(s[1]);return(!o||o.trim()===kt)&&s[2]&&(o=s[2].trim()),o||0},Zt=(t,e,s,i,o,r)=>{if(mt(t)){if(!o){let a=t(e,s,i,r);return isNaN(+a)?a||0:+a}let n=()=>{let a=t(e,s,i,r);return isNaN(+a)?a||0:+a};return o.func=n,n()}if(Et(t)&&It(t,Gs)){if(!o)return _i(t,e);let n=()=>_i(t,e);return o.func=n,n()}return t},Be=(t,e)=>t[$t]?t[Ge]&&ui(t,e)?V.ATTRIBUTE:be.includes(e)||je.get(e)?V.TRANSFORM:It(e,"--")?V.CSS_VAR:e in t.style?V.CSS:e in t?V.OBJECT:V.ATTRIBUTE:V.OBJECT,Ti=(t,e,s)=>{let i=t.style[e];i&&s&&(s[e]=i);let o=i||getComputedStyle(t[Ks]||t).getPropertyValue(e);return o==="auto"?"0":o},Jt=(t,e,s,i)=>{let o=_(s)?Be(t,e):s,r=os(t,e);if(r){let n=r.get(t);return n&&i&&(i[e]=n),n??0}if(o===V.OBJECT){let n=t[e];return n&&i&&(i[e]=n),n||0}if(o===V.ATTRIBUTE){let n=t.getAttribute(e);return n&&i&&(i[e]=n),n}return o===V.TRANSFORM?pi(t,e,i):o===V.CSS_VAR?Ti(t,e,i).trimStart():Ti(t,e,i)},we=(t,e,s)=>s==="-"?t-e:s==="+"?t+e:t*e,rs=()=>({t:S.NUMBER,n:0,u:null,o:null,d:null,s:null}),Tt=(t,e)=>{if(e.t=S.NUMBER,e.n=0,e.u=null,e.o=null,e.d=null,e.s=null,!t)return e;let s=+t;if(!isNaN(s))return e.n=s,e;let i=t;i[1]==="="&&(e.o=i[0],i=i.slice(2));let o=i.includes(" ")?!1:Qe.exec(i);if(o)return e.t=S.UNIT,e.n=+o[1],e.u=o[2],e;if(e.o)return e.n=+i,e;if(ci(i))return e.t=S.COLOR,e.d=gi(i),e;{let r=i.match(ws);return e.t=S.COMPLEX,e.d=r?r.map(Number):[],e.s=i.split(ws)||[],e}},Is=(t,e)=>(e.t=t._valueType,e.n=t._toNumber,e.u=t._unit,e.o=null,e.d=et(t._toNumbers),e.s=et(t._strings),e),rt=rs(),ns=(t,e,s)=>{let i=t._modifier,o=t._fromNumbers,r=t._toNumbers,n=t._strings,a=n[0];for(let l=0,c=r.length;l<c;l++){let h=i(C(te(o[l],r[l],e),s)),d=n[l+1];a+=`${d?h+d:h}`,t._numbers[l]=h}return a};var We=(t,e,s,i,o)=>{let r=t.parent,n=t.duration,a=t.completed,l=t.iterationDuration,c=t.iterationCount,h=t._currentIteration,d=t._loopDelay,u=t._reversed,m=t._alternate,f=t._hasChildren,T=t._delay,I=t._currentTime,$=T+l,U=e-T,B=_t(I,-T,n),k=_t(U,-T,n),Y=U-I,R=k>0,ht=k>=n,Nt=n<=b,bt=o===ot.FORCE,xt=0,At=U,Ht=0;if(c>1){let Bt=l+(ht?0:d),dt=~~(k/Bt);t._currentIteration=_t(dt,0,c),ht&&t._currentIteration--,xt=t._currentIteration%2,At=k-dt*Bt||0}let jt=u^(m&&xt),Dt=t._ease,q=ht?jt?0:n:jt?l-At:At;Dt&&(q=l*Dt(q/l)||0);let j=(r?r.backwards:U<I)?!jt:!!jt;if(t._currentTime=U,t._iterationTime=q,t.backwards=j,R&&!t.began?(t.began=!0,!s&&!(r&&(j||!r.began))&&t.onBegin(t)):U<=0&&(t.began=!1),!s&&!f&&R&&t._currentIteration!==h&&t.onLoop(t),bt||o===ot.AUTO&&(e>=(r&&T>0?0:T)&&e<=$||e<=T&&B>T||e>=$&&B!==n)||q>=$&&B!==n||q<=T&&B>0&&!ht||e<=B&&B===n&&a||ht&&!a&&Nt){if(R&&(t.computeDeltaTime(B),s||t.onBeforeUpdate(t)),!f){let Bt=bt||(j?Y*-1:Y)>=y.tickThreshold,dt=C(t._offset+(r?r._offset:0)+T+q,12),p=t._head,L,at,vt,re,Xt=0;for(;p;){let yt=p._composition,A=p._currentTime,Pt=p._changeDuration,pt=p._absoluteStartTime+p._changeDuration,P=p._nextRep,gt=p._prevRep,ft=yt!==H.none,w=gt?gt._absoluteStartTime+gt._changeDuration:0,F=gt&&gt.parent!==p.parent,lt=!P||P._isOverridden?pt:P.parent===p.parent?pt+P._delay:P._absoluteStartTime<P._absoluteUpdateStartTime?P._absoluteStartTime:P._absoluteUpdateStartTime;if((Bt||(A!==Pt||dt<=lt||gt&&!F&&(!P||P.parent!==p.parent))&&(A!==0||dt>=p._absoluteStartTime||F&&!p._hasFromValue&&!gt._isOverridden&&dt>=w||P&&!P._isOverridden&&P.parent===p.parent&&P._currentTime!==0&&q<P._startTime))&&(!gt||F||q>=p._startTime)&&(!ft||!p._isOverridden&&(!p._isOverlapped||dt<=pt)&&(!P||P._isOverridden||dt<=lt)&&(!gt||gt._isOverridden||(F?dt>=p._absoluteStartTime||!p._hasFromValue&&dt>=w:dt>=w+p._delay)))){let ct=p._currentTime=_t(q-p._startTime,0,Pt),z=p._ease(ct/p._updateDuration),Z=p._modifier,st=p._valueType,Q=p._tweenType,wt=Q===V.OBJECT,K=st===S.NUMBER,it=K&&wt||z===0||z===1?-1:y.precision,E,W;if(K)E=W=Z(C(te(p._fromNumber,p._toNumber,z),it));else if(st===S.UNIT)W=Z(C(te(p._fromNumber,p._toNumber,z),it)),E=`${W}${p._unit}`;else if(st===S.COLOR){let M=p._numbers,J=p._fromNumbers,O=p._toNumbers,ut=1-z,G=J[0],ne=J[1],Wt=J[2],Se=O[0],fe=O[1],Oe=O[2];M[0]=Z(Math.sqrt(G*G*ut+Se*Se*z)),M[1]=Z(Math.sqrt(ne*ne*ut+fe*fe*z)),M[2]=Z(Math.sqrt(Wt*Wt*ut+Oe*Oe*z)),M[3]=Z(te(J[3],O[3],z)),(!p._setter||i)&&(E=`rgba(${C(M[0],0)},${C(M[1],0)},${C(M[2],0)},${M[3]})`)}else st===S.COMPLEX&&(E=ns(p,z,it));if(ft&&(p._number=W),!i&&yt!==H.blend){let M=p.property;L=p.target,p._setter?p._setter(L,W,p):wt?L[M]=E:Q===V.ATTRIBUTE?L.setAttribute(M,E):(at=L.style,Q===V.TRANSFORM?(L!==vt&&(vt=L,re=L[le]),re[M]=E,Xt=1):Q===V.CSS?at[M]=E:Q===V.CSS_VAR&&at.setProperty(M,E)),R&&(Ht=1)}else p._value=E}else A&&gt&&!F&&q<p._startTime&&(p._currentTime=0);Xt&&p._renderTransforms&&(at.transform=is(re),Xt=0),p=p._next}!s&&Ht&&t.onRender(t)}!s&&R&&t.onUpdate(t)}return r&&Nt?!s&&(r.began&&!j&&U>0&&!a||j&&U<=b&&a)&&(t.onComplete(t),t.completed=!j):R&&ht?c===1/0?t._startTime+=t.duration:t._currentIteration>=c-1&&(t.paused=!0,!a&&!f&&(t.completed=!0,!s&&!(r&&(j||!r.began))&&(t.onComplete(t),t._resolve(t)))):t.completed=!1,Ht},Kt=(t,e,s,i,o)=>{let r=t._currentIteration;if(We(t,e,s,i,o),t._hasChildren){let n=t,a=n.backwards,l=i?e:n._iterationTime,c=Qt(),h=0,d=!0;if(!i&&n._currentIteration!==r){let u=n.iterationDuration;N(n,m=>{if(!a)!m.completed&&!m.backwards&&m._currentTime<m.iterationDuration&&We(m,u,s,1,ot.FORCE),m.began=!1,m.completed=!1;else{let f=m.duration,T=m._offset+m._delay,I=T+f;!s&&f<=b&&(!T||I===u)&&m.onComplete(m)}}),s||n.onLoop(n)}N(n,u=>{let m=C((l-u._offset)*u._speed,12);if(a&&m>u._delay+u.duration)return;let f=u._fps<n._fps?u.requestTick(c):o;h+=We(u,m,s,i,f),!u.completed&&d&&(d=!1)},a),!s&&h&&n.onRender(n),(d||a)&&n._currentTime>=n.duration&&(n.paused=!0,n.completed||(n.completed=!0,s||(n.onComplete(n),n._resolve(n))))}};var vi={},Re=(t,e,s)=>{if(s===V.TRANSFORM){let i=je.get(t);return i||t}else if(s===V.CSS||s===V.ATTRIBUTE&&ts(e)&&t in e.style){let i=vi[t];if(i)return i;{let o=t&&Cs(t);return vi[t]=o,o}}else return t},Ee=(t,e=!1)=>{if(t._hasChildren)N(t,s=>Ee(s,e),!0);else{let s=t;s.pause(),N(s,i=>{let o=i.property,r=i.target,n=i._tweenType,a=i._inlineValue,l=qt(a)||a===kt;if(i._setter){if(!e&&!l){if(Tt(a,rt),rt.d){let c=rt.d,h=i._numbers;for(let d=0,u=c.length;d<u;d++)h[d]=c[d]}else i._number=rt.n;i._setter(i.target,i._number,i)}}else if(n===V.OBJECT)!e&&!l&&(r[o]=a);else if(r[$t])if(n===V.ATTRIBUTE)e||(l?r.removeAttribute(o):r.setAttribute(o,a));else{let c=r.style;if(n===V.TRANSFORM){let h=r[le];l?delete h[o]:h[o]=a,i._renderTransforms&&(Object.keys(h).length?c.transform=is(h):c.removeProperty("transform"))}else l?c.removeProperty(Cs(o)):c[o]=a}r[$t]&&s._tail===i&&s.targets.forEach(c=>{c.getAttribute&&c.getAttribute("style")===kt&&c.removeAttribute("style")})})}return t},yi=t=>Ee(t,!0);var Ce=class{constructor(e=0){this.deltaTime=0,this._currentTime=e,this._lastTickTime=e,this._startTime=e,this._lastTime=e,this._frameDuration=Yt/Le,this._fps=Le,this._speed=1,this._hasChildren=!1,this._head=null,this._tail=null}get fps(){return this._fps}set fps(e){let s=+e,i=s<b?b:s,o=Yt/i;i>xe.frameRate&&(xe.frameRate=i),this._fps=i,this._frameDuration=o}get speed(){return this._speed}set speed(e){let s=+e;this._speed=s<b?b:s}requestTick(e){let s=this._frameDuration,i=e-this._lastTickTime,o=s*.25,r=o<4?o:4;return i+r<s?ot.NONE:(this._lastTickTime=i>=s?e-i%s:e,ot.AUTO)}computeDeltaTime(e){let s=e-this._lastTime;return this.deltaTime=s,this._lastTime=e,s}};var se={animation:null,update:tt},Si=t=>{let e=se.animation;return e||(e={duration:b,computeDeltaTime:tt,_offset:0,_delay:0,_head:null,_tail:null},se.animation=e,se.update=()=>{t.forEach(s=>{for(let i in s){let o=s[i],r=o._head;if(r){let n=r._valueType,a=n===S.COMPLEX||n===S.COLOR?et(r._fromNumbers):null,l=r._fromNumber,c=o._tail;for(;c&&c!==r;){if(a)for(let h=0,d=c._numbers.length;h<d;h++)a[h]+=c._numbers[h];else l+=c._number;c=c._prevAdd}r._toNumber=l,r._toNumbers=a}}}),We(e,1,1,0,ot.FORCE)}),e};var bi=Ut?requestAnimationFrame:setImmediate,_o=Ut?cancelAnimationFrame:clearImmediate,Ms=class extends Ce{constructor(e){super(e),this.useDefaultMainLoop=!0,this.pauseOnDocumentHidden=!0,this.defaults=xe,this.paused=!0,this.reqId=0}update(){let e=this._currentTime=Qt();if(this.requestTick(e)){this.computeDeltaTime(e);let s=this._speed,i=this._fps,o=this._head;for(;o;){let r=o._next;o.paused?(Lt(this,o),this._hasChildren=!!this._tail,o._running=!1,o.completed&&!o._cancelled&&o.cancel()):Kt(o,(e-o._startTime)*o._speed*s,0,0,o._fps<i?o.requestTick(e):ot.AUTO),o=r}se.update()}}wake(){return this.useDefaultMainLoop&&!this.reqId&&(this.requestTick(Qt()),this.reqId=bi(xi)),this}pause(){if(this.reqId)return this.paused=!0,To()}resume(){if(this.paused)return this.paused=!1,N(this,e=>e.resetTime()),this.wake()}get speed(){return this._speed*(y.timeScale===1?1:Yt)}set speed(e){let s=e*y.timeScale;this._speed!==s&&(this._speed=s,N(this,i=>i.speed=i._speed))}get timeUnit(){return y.timeScale===1?"ms":"s"}set timeUnit(e){let i=e==="s",o=i?.001:1;if(y.timeScale!==o){y.timeScale=o,y.tickThreshold=200*o;let r=i?.001:Yt;this.defaults.duration*=r,this._speed*=r}}get precision(){return y.precision}set precision(e){y.precision=e}},nt=(()=>{let t=new Ms(Qt());return Ut&&(Rs.engine=t,ae.addEventListener("visibilitychange",()=>{t.pauseOnDocumentHidden&&(ae.hidden?t.pause():t.resume())})),t})(),xi=()=>{nt._head?(nt.reqId=bi(xi),nt.update()):nt.reqId=0},To=()=>(_o(nt.reqId),nt.reqId=0,nt);var as={_rep:new WeakMap,_add:new Map},Xe=(t,e,s="_rep")=>{let i=as[s],o=i.get(t);return o||(o={},i.set(t,o)),o[e]?o[e]:o[e]={_head:null,_tail:null}},vo=(t,e)=>t._isOverridden||t._absoluteStartTime>e._absoluteStartTime,He=t=>{t._isOverlapped=1,t._isOverridden=1,t._changeDuration=b,t._currentTime=b},ls=(t,e)=>{let s=t._composition;if(s===H.replace){let i=t._absoluteStartTime;Ct(e,t,vo,"_prevRep","_nextRep");let o=t._prevRep;if(o){let r=o.parent,n=o._absoluteEndTime;if(t.parent.id!==r.id&&r.iterationCount>1&&n+(r.duration-r.iterationDuration)>i){He(o);let c=o._prevRep;for(;c&&c.parent.id===r.id;)He(c),c=c._prevRep}let a=t._absoluteUpdateStartTime;if(n>a){let c=o._startTime,h=n-(c+o._updateDuration),d=C(a-h-c,12);o._changeDuration=d,o._currentTime=d,o._isOverlapped=1,d<b&&He(o)}let l=t.parent.parent;if(!l||l!==r.parent){let c=!0;if(N(r,h=>{h._isOverlapped||(c=!1)}),c){let h=r.parent;if(h){let d=!0;N(h,u=>{u!==r&&N(u,m=>{m._isOverlapped||(d=!1)})}),d&&h.cancel()}else r.cancel()}}}}else if(s===H.blend){let i=Xe(t.target,t.property,"_add"),o=Si(as._add),r=i._head;r||(r={...t},r._composition=H.replace,r._updateDuration=b,r._startTime=0,r._numbers=et(t._fromNumbers),r._number=0,r._next=null,r._prev=null,Ct(i,r),Ct(o,r));let n=t._toNumber;if(t._fromNumber=r._fromNumber-n,t._toNumber=0,t._numbers=et(t._fromNumbers),t._number=0,r._fromNumber=n,t._toNumbers.length){let a=et(t._toNumbers);a.forEach((l,c)=>{t._fromNumbers[c]=r._fromNumbers[c]-l,t._toNumbers[c]=0}),r._fromNumbers=a}Ct(i,t,null,"_prevAdd","_nextAdd")}return t},Ls=t=>{let e=t._composition;if(e!==H.none){let s=t.target,i=t.property,n=as._rep.get(s)[i];if(Lt(n,t,"_prevRep","_nextRep"),e===H.blend){let a=as._add,l=a.get(s);if(!l)return;let c=l[i],h=se.animation;Lt(c,t,"_prevAdd","_nextAdd");let d=c._head;if(d&&d===c._tail){Lt(c,d,"_prevAdd","_nextAdd"),Lt(h,d);let u=!0;for(let m in l)if(l[m]._head){u=!1;break}u&&a.delete(s)}}}return t},wi=(t,e,s)=>{let i=!1;return N(e,o=>{let r=o.target;if(t.includes(r)){let n=o.property,a=o._tweenType,l=Re(s,r,a);(!l||l&&l===n)&&(o.parent._tail===o&&o._tweenType===V.TRANSFORM&&o._prev&&o._prev._tweenType===V.TRANSFORM&&(o._prev._renderTransforms=1),Lt(e,o),Ls(o),i=!0)}},!0),i},$e=(t,e,s)=>{let i=e||nt,o;if(i._hasChildren){let r=0;N(i,n=>{if(!n._hasChildren)if(o=wi(t,n,s),o&&!n._head)n.cancel(),Lt(i,n);else{let l=n._offset+n._delay+n.duration;l>r&&(r=l)}n._head?$e(t,n,s):n._hasChildren=!1},!0),_(i.iterationDuration)||(i.iterationDuration=r)}else o=wi(t,i,s);o&&!i._head&&(i._hasChildren=!1,i.cancel&&i.cancel())};var Ri=t=>(t.paused=!0,t.began=!1,t.completed=!1,t),Vs=t=>(t._cancelled&&(t._hasChildren?N(t,Vs):N(t,e=>{e._composition!==H.none&&ls(e,Xe(e.target,e.property))}),t._cancelled=0),t),Ei=0,yo=(t,e)=>t._priority>e._priority,ie=class extends Ce{constructor(e={},s=null,i=0){super(0),++Ei;let{id:o,delay:r,duration:n,reversed:a,alternate:l,loop:c,loopDelay:h,autoplay:d,frameRate:u,playbackRate:m,priority:f,onComplete:T,onLoop:I,onPause:$,onBegin:U,onBeforeUpdate:B,onUpdate:k}=e;Ue.current&&Ue.current.register(this);let Y=s?0:nt._lastTickTime,R=s?s.defaults:y.defaults,ht=mt(r)||_(r)?R.delay:+r,Nt=mt(n)||_(n)?1/0:+n,bt=X(c,R.loop),xt=X(h,R.loopDelay),At=bt===!0||bt===1/0||bt<0?1/0:bt+1,Ht=0;s?Ht=i:(nt.reqId||nt.requestTick(Qt()),Ht=(nt._lastTickTime-nt._startTime)*y.timeScale),this.id=_(o)?Ei:o,this.parent=s,this.duration=Te((Nt+xt)*At-xt)||b,this.backwards=!1,this.paused=!0,this.began=!1,this.completed=!1,this.onBegin=U||R.onBegin,this.onBeforeUpdate=B||R.onBeforeUpdate,this.onUpdate=k||R.onUpdate,this.onLoop=I||R.onLoop,this.onPause=$||R.onPause,this.onComplete=T||R.onComplete,this.iterationDuration=Nt,this.iterationCount=At,this._autoplay=s?!1:X(d,R.autoplay),this._offset=Ht,this._delay=ht,this._loopDelay=xt,this._iterationTime=0,this._currentIteration=0,this._resolve=tt,this._running=!1,this._reversed=+X(a,R.reversed),this._reverse=this._reversed,this._cancelled=0,this._alternate=X(l,R.alternate),this._prev=null,this._next=null,this._lastTickTime=Y,this._startTime=Y,this._lastTime=Y,this._fps=X(u,R.frameRate),this._speed=X(m,R.playbackRate),this._priority=+X(f,1)}get cancelled(){return!!this._cancelled}set cancelled(e){e?this.cancel():this.reset(!0).play()}get currentTime(){return _t(C(this._currentTime,y.precision),-this._delay,this.duration)}set currentTime(e){let s=this.paused;this.pause().seek(+e),s||this.resume()}get iterationCurrentTime(){return _t(C(this._iterationTime,y.precision),0,this.iterationDuration)}set iterationCurrentTime(e){this.currentTime=this.iterationDuration*this._currentIteration+e}get progress(){return _t(C(this._currentTime/this.duration,10),0,1)}set progress(e){this.currentTime=this.duration*e}get iterationProgress(){return _t(C(this._iterationTime/this.iterationDuration,10),0,1)}set iterationProgress(e){let s=this.iterationDuration;this.currentTime=s*this._currentIteration+s*e}get currentIteration(){return this._currentIteration}set currentIteration(e){this.currentTime=this.iterationDuration*_t(+e,0,this.iterationCount-1)}get reversed(){return!!this._reversed}set reversed(e){e?this.reverse():this.play()}get speed(){return super.speed}set speed(e){super.speed=e,this.resetTime()}reset(e=!1){return Vs(this),this._reversed&&!this._reverse&&(this.reversed=!1),this._iterationTime=this.iterationDuration,Kt(this,0,1,~~e,ot.FORCE),Ri(this),this._hasChildren&&N(this,Ri),this}init(e=!1){this.fps=this._fps,this.speed=this._speed,!e&&this._hasChildren&&Kt(this,this.duration,1,~~e,ot.FORCE),this.reset(e);let s=this._autoplay;return s===!0?this.resume():s&&!_(s.linked)&&s.link(this),this}resetTime(){let e=1/(this._speed*nt._speed);return this._startTime=Qt()-(this._currentTime+this._delay)*e,this}pause(){return this.paused?this:(this.paused=!0,this.onPause(this),this)}resume(){return this.paused?(this.paused=!1,this.duration<=b&&!this._hasChildren?Kt(this,b,0,0,ot.FORCE):(this._running||(Ct(nt,this,yo),nt._hasChildren=!0,this._running=!0),this.resetTime(),this._startTime-=12,nt.wake()),this):this}restart(){return this.reset().resume()}seek(e,s=0,i=0){Vs(this),this.completed=!1;let o=this.paused;return this.paused=!0,Kt(this,e+this._delay,~~s,~~i,ot.AUTO),o?this:this.resume()}alternate(){let e=this._reversed,s=this.iterationCount,i=this.iterationDuration,o=s===1/0?_e(Me/i):s;return this._reversed=+(this._alternate&&!(o%2)?e:!e),s===1/0?this.iterationProgress=this._reversed?1-this.iterationProgress:this.iterationProgress:this.seek(i*o-this._currentTime),this.resetTime(),this}play(){return this._reversed&&this.alternate(),this.resume()}reverse(){return this._reversed||this.alternate(),this.resume()}cancel(){return this._hasChildren?N(this,e=>e.cancel(),!0):N(this,Ls),this._cancelled=1,this.pause()}stretch(e){let s=this.duration,i=ee(e);if(s===i)return this;let o=e/s,r=e<=b;return this.duration=r?b:i,this.iterationDuration=r?b:ee(this.iterationDuration*o),this._offset*=o,this._delay*=o,this._loopDelay*=o,this}revert(){Kt(this,0,1,0,ot.AUTO);let e=this._autoplay;return e&&e.linked&&e.linked===this&&e.revert(),this.cancel()}complete(e=0){return this.seek(this.duration,e).cancel()}then(e=tt){let s=this.then,i=()=>{this.then=null,e(this),this.then=s,this._resolve=tt};return new Promise(o=>(this._resolve=()=>o(i()),this.completed&&this._resolve(),this))}};function Ci(t){let e=Et(t)?Ue.root.querySelectorAll(t):t;if(e instanceof NodeList||e instanceof HTMLCollection)return e}function Ne(t){if(qt(t))return[];if(!Ut)return Mt(t)&&t.flat(1/0)||[t];if(Mt(t)){let s=t.flat(1/0),i=[];for(let o=0,r=s.length;o<r;o++){let n=s[o];if(!qt(n)){let a=Ci(n);if(a)for(let l=0,c=a.length;l<c;l++){let h=a[l];if(!qt(h)){let d=!1;for(let u=0,m=i.length;u<m;u++)if(i[u]===h){d=!0;break}d||i.push(h)}}else{let l=!1;for(let c=0,h=i.length;c<h;c++)if(i[c]===n){l=!0;break}l||i.push(n)}}}return i}let e=Ci(t);return e?Array.from(e):[t]}function ce(t){let e=Ne(t),s=e.length;for(let i=0;i<s;i++){let o=e[i];if(!o[xs]){o[xs]=!0;let r=ts(o);(o.nodeType||r)&&(o[$t]=!0,o[Ge]=r,o[le]={})}}return e}var Us={deg:1,rad:180/ze,turn:360},Ni={},Ye=(t,e,s,i=!1)=>{let o=e.u,r=e.n;if(e.t===S.UNIT&&o===s)return e;let n=r+o+s,a=Ni[n];if(!_(a)&&!i)e.n=a;else{let l;if(o in Us)l=r*Us[o]/Us[s];else{let h=t.cloneNode(),d=t.parentNode,u=d&&d!==ae?d:ae.body;u.appendChild(h);let m=h.style;m.width=100+o;let f=h.offsetWidth||100;m.width=100+s;let T=h.offsetWidth||100,I=f/T;u.removeChild(h),l=I*r}e.n=l,Ni[n]=l}return e.t,S.UNIT,e.u=s,e};var oe=t=>t;var qe=(t=1.68)=>e=>ge(e,+t),Fs={in:t=>e=>t(e),out:t=>e=>1-t(1-e),inOut:t=>e=>e<.5?t(e*2)/2:1-t(e*-2+2)/2,outIn:t=>e=>e<.5?(1-t(1-e*2))/2:(t(e*2-1)+1)/2},So=ze/2,Ai=ze*2,Di={[kt]:qe,Quad:qe(2),Cubic:qe(3),Quart:qe(4),Quint:qe(5),Sine:t=>1-di(t*So),Circ:t=>1-Fe(1-t*t),Expo:t=>t?ge(2,10*t-10):0,Bounce:t=>{let e,s=4;for(;t<((e=ge(2,--s))-1)/11;);return 1/ge(4,3-s)-7.5625*ge((e*3-2)/22-t,2)},Back:(t=1.7)=>e=>(+t+1)*e*e*e-+t*e*e,Elastic:(t=1,e=.3)=>{let s=_t(+t,1,10),i=_t(+e,b,2),o=i/Ai*fi(1/s),r=Ai/i;return n=>n===0||n===1?n:-s*ge(2,-10*(1-n))*hi((1-n-o)*r)}},ks=(()=>{let t={linear:oe,none:oe};for(let e in Fs)for(let s in Di){let i=Di[s],o=Fs[e];t[e+s]=s===kt||s==="Back"||s==="Elastic"?(r,n)=>o(i(r,n)):o(i)}return t})(),cs={linear:oe,none:oe},bo=t=>{if(cs[t])return cs[t];if(t.indexOf("(")<=-1){let s=Fs[t]||t.includes("Back")||t.includes("Elastic")?ks[t]():ks[t];return s?cs[t]=s:oe}else{let e=t.slice(0,-1).split("("),s=ks[e[0]];return s?cs[t]=s(...e[1].split(",")):oe}},Pi=["steps(","irregular(","linear(","cubicBezier("],ve=t=>{if(Et(t)){for(let s=0,i=Pi.length;s<i;s++)if(It(t,Pi[s]))return console.warn(`String syntax for \`ease: "${t}"\` has been removed from the core and replaced by importing and passing the easing function directly: \`ease: ${t}\``),oe}return mt(t)?t:Et(t)?bo(t):oe};var v=rs(),x=rs(),Ae={},us={func:null},hs={func:null},ds=[null],De=[null,null],fs={to:null},xo=0,Oi=0,ue,Gt,wo=(t,e)=>{let s={};if(Mt(t)){let i=[].concat(...t.map(o=>Object.keys(o))).filter(ke);for(let o=0,r=i.length;o<r;o++){let n=i[o],a=t.map(l=>{let c={};for(let h in l){let d=l[h];ke(h)?h===n&&(c.to=d):c[h]=d}return c});s[n]=a}}else{let i=X(e.duration,y.defaults.duration);Object.keys(t).map(r=>({o:parseFloat(r)/100,p:t[r]})).sort((r,n)=>r.o-n.o).forEach(r=>{let n=r.o,a=r.p;for(let l in a)if(ke(l)){let c=s[l];c||(c=s[l]=[]);let h=n*i,d=c.length,u=c[d-1],m={to:a[l]},f=0;for(let T=0;T<d;T++)f+=c[T].duration;d===1&&(m.from=u.to),a.ease&&(m.ease=a.ease),m.duration=h-(d?f:0),c.push(m)}return r});for(let r in s){let n=s[r],a;for(let l=0,c=n.length;l<c;l++){let h=n[l],d=h.ease;h.ease=a||void 0,a=d}n[0].duration||n.shift()}}return s},he=class extends ie{constructor(e,s,i,o,r=!1,n=0,a){super(s,i,o),this._head,this._tail,++Oi;let l=ce(e),c=l.length,h=s.keyframes,d=h?ss(wo(h,s),s):s,{id:u,delay:m,duration:f,ease:T,playbackEase:I,modifier:$,composition:U,onRender:B}=d,k=i?i.defaults:y.defaults,Y=X(T,k.ease),R=X(I,k.playbackEase),ht=R?ve(R):null,Nt=!_(Y.ease),bt=Nt?Y.ease:X(T,ht?"linear":k.ease),xt=Nt?Y.settlingDuration:X(f,k.duration),At=X(m,k.delay),Ht=$||k.modifier,jt=_(U)&&c>=Yt?H.none:_(U)?k.composition:U,Dt=this._offset+(i?i._offset:0);Nt&&(Y.parent=this);let q=NaN,j=NaN,Bt=0,dt=0;for(let p=0;p<c;p++){let L=l[p],at=n||p,vt=a||l,re=NaN,Xt=NaN;for(let yt in d)if(ke(yt)){let A=Be(L,yt),Pt=os(L,yt),pt=Re(yt,L,A),P=d[yt],gt=Mt(P);if(r&&!gt&&(De[0]=P,De[1]=P,P=De),gt){let z=P.length,Z=!pe(P[0]);z===2&&Z?(fs.to=P,ds[0]=fs,ue=ds):z>2&&Z?(ue=[],P.forEach((st,Q)=>{Q?Q===1?(De[1]=st,ue.push(De)):ue.push(st):De[0]=st})):ue=P}else ds[0]=P,ue=ds;let ft=null,w=null,F=NaN,lt=0,ct=0;for(let z=ue.length;ct<z;ct++){let Z=ue[ct];pe(Z)?Gt=Z:(fs.to=Z,Gt=fs),us.func=null,hs.func=null;let st=Zt(X(Gt.composition,jt),L,at,vt,null,null),Q=Rt(st)?st:H[st];!ft&&Q!==H.none&&(ft=Xe(L,pt));let wt=ft?ft._tail:null,K=i&&wt&&wt.parent.parent===i?wt:w,it=Zt(Gt.to,L,at,vt,us,K),E;pe(it)&&!_(it.to)?(Gt=it,E=it.to):E=it;let W=Zt(Gt.from,L,at,vt,hs,K),M=Gt.ease||bt,J=Zt(M,L,at,vt,null,K),O=mt(J)||Et(J)?J:M,ut=!_(O)&&!_(O.ease),G=ut?O.ease:O,ne=ut?O.settlingDuration:Zt(X(Gt.duration,z>1?Zt(xt,L,at,vt,null,K)/z:xt),L,at,vt,null,K),Wt=Zt(X(Gt.delay,ct?0:At),L,at,vt,null,K),Se=Gt.modifier||Ht,fe=!_(W),Oe=!_(E),Ie=Mt(E),ao=Ie||fe&&Oe,lo=w?lt:0,vs=w?lt+Wt:Wt,ys=C(Dt+vs,12),co=C(Dt+lo,12);!dt&&(fe||Ie)&&(dt=1);let Vt=w;if(Q!==H.none){let D=ft._head;for(;D&&D._absoluteStartTime<=ys;)if(D._isOverridden||(Vt=D),D=D._nextRep,D&&D._absoluteStartTime>=ys)for(;D;)He(D),D=D._nextRep}if(ao){Tt(Ie?Zt(E[0],L,at,vt,hs,K):W,v),Tt(Ie?Zt(E[1],L,at,vt,us,K):E,x);let D=Jt(L,pt,A,Ae);v.t===S.NUMBER&&(Vt?Vt._valueType===S.UNIT&&(v.t=S.UNIT,v.u=Vt._unit):(Tt(D,rt),rt.t===S.UNIT&&(v.t=S.UNIT,v.u=rt.u)))}else Oe?Tt(E,x):w?Is(w,x):Tt(i&&Vt&&Vt.parent.parent===i?Vt._value:Jt(L,pt,A,Ae),x),fe?Tt(W,v):w?Is(w,v):Tt(i&&Vt&&Vt.parent.parent===i?Vt._value:Jt(L,pt,A,Ae),v);if(v.o&&(v.n=we(Vt?Vt._toNumber:Tt(Jt(L,pt,A,Ae),rt).n,v.n,v.o)),x.o&&(x.n=we(v.n,x.n,x.o)),v.t!==x.t){if(v.t===S.COMPLEX||x.t===S.COMPLEX){let D=v.t===S.COMPLEX?v:x,St=v.t===S.COMPLEX?x:v;St.t=S.COMPLEX,St.s=et(D.s),St.d=D.d.map(()=>St.n)}else if(v.t===S.UNIT||x.t===S.UNIT){let D=v.t===S.UNIT?v:x,St=v.t===S.UNIT?x:v;St.t=S.UNIT,St.u=D.u}else if(v.t===S.COLOR||x.t===S.COLOR){let D=v.t===S.COLOR?v:x,St=v.t===S.COLOR?x:v;St.t=S.COLOR,St.d=D.d.map(()=>0)}}if(v.u!==x.u){let D=x.u?v:x;D=Ye(L,D,x.u?x.u:v.u,!1)}if(x.d&&v.d&&x.d.length!==v.d.length){let D=v.d.length>x.d.length?v:x,St=D===v?x:v;St.d=D.d.map(($o,qs)=>_(St.d[qs])?0:St.d[qs]),St.s=et(D.s)}let Ss=C(+ne||b,12),Xs=Ae[pt];qt(Xs)||(Ae[pt]=null);let uo=Pt?Pt.set:null;lt=C(vs+Ss,12);let Je=v.d,$s=x.d,Ys=x.s,Ot={parent:this,id:xo++,property:pt,target:L,_value:null,_toFunc:us.func,_fromFunc:hs.func,_ease:ve(G),_fromNumbers:Je?et(Je):Ve,_toNumbers:$s?et($s):Ve,_strings:Ys?et(Ys):Ve,_fromNumber:v.n,_toNumber:x.n,_numbers:Je?et(Je):Ve,_number:v.n,_unit:x.u,_modifier:Se,_currentTime:0,_startTime:vs,_delay:+Wt,_updateDuration:Ss,_changeDuration:Ss,_absoluteStartTime:ys,_absoluteUpdateStartTime:co,_absoluteEndTime:C(Dt+lt,12),_hasFromValue:fe||Ie?1:0,_tweenType:A,_setter:uo,_valueType:x.t,_composition:Q,_isOverlapped:0,_isOverridden:0,_renderTransforms:0,_inlineValue:Xs,_prevRep:null,_nextRep:null,_prevAdd:null,_nextAdd:null,_prev:null,_next:null};Q!==H.none&&ls(Ot,ft);let bs=Ot._valueType;if(bs===S.COMPLEX)Ot._value=ns(Ot,1,-1);else if(bs===S.UNIT)Ot._value=`${Se(Ot._toNumber)}${Ot._unit}`;else if(bs===S.COLOR){let D=x.d;Ot._value=`rgba(${C(D[0],0)},${C(D[1],0)},${C(D[2],0)},${D[3]})`}else Ot._value=Se(Ot._toNumber);isNaN(F)&&(F=Ot._startTime),w=Ot,Bt++,Ct(this,Ot)}(isNaN(j)||F<j)&&(j=F),(isNaN(q)||lt>q)&&(q=lt),A===V.TRANSFORM&&(re=Bt-ct,Xt=Bt)}if(!isNaN(re)){let yt=0;N(this,A=>{yt>=re&&yt<Xt&&(A._renderTransforms=1,A._composition===H.blend&&N(se.animation,Pt=>{Pt.id===A.id&&(Pt._renderTransforms=1)})),yt++})}}c||console.warn("No target found. Make sure the element you're trying to animate is accessible before creating your animation."),j?(N(this,p=>{p._startTime-p._delay||(p._delay-=j),p._startTime-=j}),q-=j):j=0,q||(q=b,this.iterationCount=0),this.targets=l,this.id=_(u)?Oi:u,this.duration=q===b?b:Te((q+this._loopDelay)*this.iterationCount-this._loopDelay)||b,this.onRender=B||k.onRender,this._ease=ht,this._delay=j,this.iterationDuration=q,!this._autoplay&&dt&&this.onRender(this)}stretch(e){let s=this.duration;if(s===ee(e))return this;let i=e/s;return N(this,o=>{o._updateDuration=ee(o._updateDuration*i),o._changeDuration=ee(o._changeDuration*i),o._currentTime*=i,o._delay*=i,o._startTime*=i,o._absoluteStartTime*=i,o._absoluteUpdateStartTime*=i,o._absoluteEndTime*=i}),super.stretch(e)}refresh(){return N(this,e=>{let s=e._toFunc,i=e._fromFunc;(s||i)&&(i?(Tt(i(),v),v.u!==e._unit&&e.target[$t]&&Ye(e.target,v,e._unit,!0),e._fromNumbers=et(v.d),e._fromNumber=v.n):s&&(Tt(Jt(e.target,e.property,e._tweenType),rt),e._fromNumbers=et(rt.d),e._fromNumber=rt.n),s&&(Tt(s(),x),e._toNumbers=et(x.d),e._strings=et(x.s),e._toNumber=x.o?we(e._fromNumber,x.n,x.o):x.n))}),this.duration===b&&this.restart(),this}revert(){return super.revert(),Ee(this)}then(e){return super.then(e)}},zs=(t,e)=>y.editor?y.editor.addAnimation(t,e):new he(t,e,null,0,!1).init();var Ro=(t,e)=>{if(It(e,"<")){let s=e[1]==="<",i=t._tail,o=i?i._offset+i._delay:0;return s?o:o+i.duration}},ye=(t,e)=>{let s=t.iterationDuration;if(s===b&&(s=0),_(e))return s;if(Rt(+e))return+e;let i=e,o=t?t.labels:null,r=!qt(o),n=Ro(t,i),a=!_(n),l=ai.exec(i);if(l){let c=l[0],h=i.split(c),d=r&&h[0]?o[h[0]]:s,u=a?n:r?d:s,m=+h[1];return we(u,m,c[0])}else return a?n:r?_(o[i])?s:o[i]:s};function Eo(t){return Te((t.iterationDuration+t._loopDelay)*t.iterationCount-t._loopDelay)||b}function Bs(t,e,s,i,o,r){let a=Rt(t.duration)&&t.duration<=b?s-b:s;e.composition&&Kt(e,a,1,1,ot.AUTO);let l=i?new he(i,t,e,a,!1,o,r):new ie(t,e,a);return e.composition&&l.init(!0),Ct(e,l),N(e,c=>{let d=c._offset+c._delay+c.duration;d>e.iterationDuration&&(e.iterationDuration=d)}),e.duration=Eo(e),e}var Ii=0,ms=class extends ie{constructor(e={}){super(e,null,0),++Ii,this.id=_(e.id)?Ii:e.id,this.duration=0,this.labels={};let s=e.defaults,i=y.defaults;this.defaults=s?ss(s,i):i,this.composition=X(e.composition,!0),this.onRender=e.onRender||i.onRender;let o=X(e.playbackEase,i.playbackEase);this._ease=o?ve(o):null,this.iterationDuration=0}add(e,s,i){let o=pe(s),r=pe(e);if(o||r){if(this._hasChildren=!0,o){let n=s,a=y.editor&&y.editor.addTimelineChild,l=i&&i.type==="Stagger"&&y.editor,c=mt(i)?i:null;if(c||l){let h=Ne(e),d=this.duration,u=this.iterationDuration,m=n.id,f=0,T=h.length,I=a?a(e,n,this.id,i,T):null,$=c||y.editor.resolveStagger(i.defaultValue);h.forEach(U=>{let B={...I||n};this.duration=d,this.iterationDuration=u,_(m)||(B.id=m+"-"+f);let k=ye(this,$(U,f,h,null,this));Bs(B,this,k,U,f,h),f++})}else{let h=a?a(e,n,this.id,i):n,d=i&&i.type?i.defaultValue:i;Bs(h,this,ye(this,d),e)}}else Bs(e,this,ye(this,s));return this.composition&&this.init(!0),this}}sync(e,s){if(_(e)||e&&_(e.pause))return this;e.pause();let i=+(e.effect?e.effect.getTiming().duration:e.duration);!_(e)&&!_(e.persist)&&(e.persist=!0);let o=y.editor,r=o&&o.addTimelineChild;o&&o.addTimelineSync&&(s=o.addTimelineSync(e,s,this.id),o.addTimelineChild=null);let n=this.add(e,{currentTime:[0,i],duration:i,delay:0,ease:"linear",playbackEase:"linear"},s);return o&&(o.addTimelineChild=r),n}set(e,s,i){return _(s)?this:(s.duration=b,s.composition=H.replace,this.add(e,s,i))}call(e,s){return _(e)||e&&!mt(e)?this:(y.editor&&y.editor.addTimelineCall&&(s=y.editor.addTimelineCall(e,s,this.id)),this.add({duration:0,delay:0,onComplete:()=>e(this)},s))}label(e,s){return _(e)||e&&!Et(e)?this:(y.editor&&y.editor.addTimelineLabel&&(s=y.editor.addTimelineLabel(e,s,this.id)),this.labels[e]=ye(this,s),this)}remove(e,s){return $e(Ne(e),this,s),this}stretch(e){let s=this.duration;if(s===ee(e))return this;let i=e/s,o=this.labels;N(this,r=>r.stretch(r.duration*i));for(let r in o)o[r]*=i;return super.stretch(e)}refresh(){return N(this,e=>{e.refresh&&e.refresh()}),this}revert(){return super.revert(),N(this,e=>e.revert,!0),Ee(this)}then(e){return super.then(e)}},Ws=t=>y.editor?y.editor.addTimeline(t):new ms(t).init();var Hs={};Js(Hs,{clamp:()=>_t,damp:()=>Mo,degToRad:()=>Oo,lerp:()=>te,mapRange:()=>Po,padEnd:()=>Ao,padStart:()=>No,radToDeg:()=>Io,round:()=>C,roundPad:()=>Co,snap:()=>mi,wrap:()=>Do});var Co=(t,e)=>(+t).toFixed(e),No=(t,e,s)=>`${t}`.padStart(e,s),Ao=(t,e,s)=>`${t}`.padEnd(e,s),Do=(t,e,s)=>((t-e)%(s-e)+(s-e))%(s-e)+e,Po=(t,e,s,i,o)=>i+(t-e)/(s-e)*(o-i),Oo=t=>t*Math.PI/180,Io=t=>t*180/Math.PI,Mo=(t,e,s,i)=>i?i===1?e:te(t,e,1-Math.exp(-i*s*.1)):t;var Mi={_head:null,_tail:null},Li=(t,e,s)=>{let i=Mi._head,o;for(;i;){let r=i._next,n=i.$el===t,a=!e||i.property===e,l=!s||i.parent===s;if(n&&a&&l){o=i.animation;try{o.commitStyles()}catch{}o.cancel(),Lt(Mi,i);let c=i.parent;c&&(c._completed++,c.animations.length===c._completed&&(c.completed=!0,c.paused=!0,c.muteCallbacks||(c.onComplete(c),c._resolve(c))))}i=r}return o};function Vi(t,e,s){let i=ce(t);if(!i.length)return;let[o]=i,r=Be(o,e),n=Re(e,o,r),a=Jt(o,n);if(_(s))return a;if(Tt(a,rt),rt.t===S.NUMBER||rt.t===S.UNIT){if(s===!1)return rt.n;{let l=Ye(o,rt,s,!1);return`${C(l.n,y.precision)}${l.u}`}}}var Ui=(t,e)=>{if(!_(e))return y.editor&&y.editor.addSet?y.editor.addSet(t,e):(e.duration=b,e.composition=X(e.composition,H.none),new he(t,e,null,0,!0).resume())},ki=(t,e,s)=>{let i=Ne(t);for(let o=0,r=i.length;o<r;o++)Li(i[o],s,e&&e.controlAnimation&&e);return $e(i,e,s),i};var Fi=(t=tt)=>new ie({duration:1*y.timeScale,onComplete:t},null,0).resume(),zi=t=>{let e;return((...s)=>{let i,o,r,n,a;e&&(i=e.currentIteration,o=e.iterationProgress,r=e.reversed,n=e._alternate,a=e._startTime,e.revert());let l=t(...s);return l&&!mt(l)&&l.revert&&(e=l),_(o)||(e.currentIteration=i,e.iterationProgress=(n&&i%2?!r:r)?1-o:o,e._startTime=a),l||tt})};var Ts={};Js(Ts,{$:()=>ce,addChild:()=>Ct,clamp:()=>Ki,cleanInlineStyles:()=>yi,createSeededRandom:()=>gs,damp:()=>Qi,degToRad:()=>qi,forEachChildren:()=>N,get:()=>Vi,keepTime:()=>zi,lerp:()=>ji,mapRange:()=>Yi,padEnd:()=>Xi,padStart:()=>Hi,radToDeg:()=>Zi,random:()=>Pe,randomPick:()=>to,remove:()=>ki,removeChild:()=>Lt,round:()=>Gi,roundPad:()=>Wi,set:()=>Ui,shuffle:()=>_s,snap:()=>Ji,stagger:()=>Ze,sync:()=>Fi,wrap:()=>$i});var Ft=Hs,ps={},Lo=(t,e=0)=>(...s)=>e?i=>t(...s,i):i=>t(i,...s),Bi=t=>(...e)=>{let s=t(...e);return new Proxy(tt,{apply:(i,o,[r])=>s(r),get:(i,o)=>{if(ps[o])return Bi((...r)=>{let n=ps[o](...r);return a=>n(s(a))})}})},zt=(t,e,s=0)=>{let i=(...o)=>(o.length<e.length?Bi(Lo(e,s)):e)(...o);return ps[t]||(ps[t]=i),i},Wi=zt("roundPad",Ft.roundPad),Hi=zt("padStart",Ft.padStart),Xi=zt("padEnd",Ft.padEnd),$i=zt("wrap",Ft.wrap),Yi=zt("mapRange",Ft.mapRange),qi=zt("degToRad",Ft.degToRad),Zi=zt("radToDeg",Ft.radToDeg),Ji=zt("snap",Ft.snap),Ki=zt("clamp",Ft.clamp),Gi=zt("round",Ft.round),ji=zt("lerp",Ft.lerp,1),Qi=zt("damp",Ft.damp,1);var Pe=(t=0,e=1,s=0)=>{let i=10**s;return Math.floor((Math.random()*(e-t+1/i)+t)*i)/i},Vo=0,gs=(t,e=0,s=1,i=0)=>{let o=t===void 0?Vo++:t;return(r=e,n=s,a=i)=>{o+=1831565813,o=Math.imul(o^o>>>15,o|1),o^=o+Math.imul(o^o>>>7,o|61);let l=10**a;return Math.floor((((o^o>>>14)>>>0)/4294967296*(n-r+1/l)+r)*l)/l}},to=t=>t[Pe(0,t.length-1)],_s=(t,e=Pe)=>{let s=t.length,i,o;for(;s;)o=e(0,--s),i=t[s],t[s]=t[o],t[o]=i;return t};var Ze=(t,e={})=>{let s=[],i=0,o,r=null,n=e.from,a=e.reversed,l=e.ease,c=!_(l),d=c&&!_(l.ease)?l.ease:c?ve(l):null,u=e.grid,m=u===!0,f=e.axis,T=e.total,I=_(n)||n===0||n==="first",$=n==="center",U=n==="last",B=n==="random",k=Mt(n),Y=Mt(t),R=e.use,ht=Y?es(t[0]):es(t),Nt=Y?es(t[1]):0,bt=Qe.exec((Y?t[1]:t)+kt),xt=e.start||0+(Y?ht:0),At=e.seed,jt=!_(At)&&At!==!1?gs(At===!0?0:At):Pe,Dt=e.jitter,q=!_(Dt),j=Mt(Dt),Bt=j?Dt[0]:Dt||0,dt=j?Dt[1]:Dt||0,p=I?0:Rt(n)?n:0;return(L,at,vt,re,Xt)=>{let[yt]=ce(L),A=_(T)?vt.length:T,Pt=_(R)?!1:mt(R)?R(yt,at,A):Jt(yt,R),pt=Rt(Pt)||Et(Pt)&&Rt(+Pt)?+Pt:at,P=pt>=0&&pt<A?pt:at;if($&&(p=(A-1)/2),U&&(p=A-1),!s.length){if(m){let w=!0,F=!1,lt=1/0,ct=1/0,z=1/0,Z=-1/0,st=-1/0,Q=-1/0,wt=[],K=[],it=[];for(let E=0;E<A;E++){let W=vt[E],M=0,J=0,O=0,ut=!1;if(W&&mt(W.getBoundingClientRect)){let G=W.getBoundingClientRect();M=G.left+G.width/2,J=G.top+G.height/2,ut=!0}else{let G=W;G&&Rt(G.x)&&Rt(G.y)&&(M=G.x,J=G.y,Rt(G.z)&&(O=G.z,F=!0),ut=!0)}if(!ut){w=!1;break}wt.push(M),K.push(J),it.push(O),M<lt&&(lt=M),J<ct&&(ct=J),O<z&&(z=O),M>Z&&(Z=M),J>st&&(st=J),O>Q&&(Q=O)}if(w){let E=wt[0],W=K[0],M=it[0];k?(E=lt+n[0]*(Z-lt),W=ct+n[1]*(st-ct),M=F?z+(n.length>=3?n[2]:.5)*(Q-z):0):$?(E=(lt+Z)/2,W=(ct+st)/2,M=(z+Q)/2):U?(E=wt[A-1],W=K[A-1],M=it[A-1]):Rt(n)&&(E=wt[n],W=K[n],M=it[n]);for(let O=0;O<A;O++){let ut=E-wt[O],G=W-K[O],ne=M-it[O],Wt=Fe(ut*ut+G*G+(F?ne*ne:0));f==="x"&&(Wt=-ut),f==="y"&&(Wt=-G),f==="z"&&(Wt=-ne),s.push(Wt)}let J=1/0;for(let O=0;O<A;O++){let ut=me(s[O]);ut>0&&ut<J&&(J=ut)}if(J>0&&J<1/0)for(let O=0;O<A;O++)s[O]=s[O]/J}else for(let E=0;E<A;E++)s.push(me(p-E))}else for(let w=0;w<A;w++)if(!u)s.push(me(p-w));else{let F=u.length,lt=u[0]*u[1],ct,z,Z;k?(ct=n[0]*(u[0]-1),z=n[1]*(u[1]-1),Z=F===3?(n.length>=3?n[2]:.5)*(u[2]-1):0):$?(ct=(u[0]-1)/2,z=(u[1]-1)/2,Z=F===3?(u[2]-1)/2:0):(ct=p%u[0],z=_e(p/u[0])%u[1],Z=F===3?_e(p/lt):0);let st=w%u[0],Q=_e(w/u[0])%u[1],wt=F===3?_e(w/lt):0,K=ct-st,it=z-Q,E=Z-wt,W=Fe(K*K+it*it+(F===3?E*E:0));f==="x"&&(W=-K),f==="y"&&(W=-it),f==="z"&&(W=-E),s.push(W)}i=s[0];for(let w=1;w<A;w++)s[w]>i&&(i=s[w]);if(d||a)for(let w=0;w<A;w++){let F=s[w];d&&(F=d(F/i)*i),a&&(F=f?-F:me(i-F)),s[w]=F}if(q){r=new Array(A);for(let w=0;w<A;w++)r[w]=jt(-1,1,4)}B&&(s=_s(s,jt))}let gt=Y?(Nt-ht)/i:ht;_(o)&&(o=Xt?ye(Xt,_(e.start)?Xt.iterationDuration:xt):xt);let ft=o+(gt*C(s[P],2)||0);if(q){let w=i?s[P]/i:0,F=Bt+(dt-Bt)*w;ft=ft+r[P]*F}return e.modifier&&(ft=e.modifier(ft)),bt&&(ft=`${ft}${bt[2]}`),ft}};var eo="1.3.26";function oo(t,e,s){return Math.max(t,Math.min(e,s))}function Uo(t,e,s){return(1-s)*t+s*e}function ko(t,e,s,i){return Uo(t,e,1-Math.exp(-s*i))}function Fo(t,e){return(t%e+e)%e}var zo=class{constructor(){g(this,"isRunning",!1);g(this,"value",0);g(this,"from",0);g(this,"to",0);g(this,"currentTime",0);g(this,"lerp");g(this,"duration");g(this,"easing");g(this,"onUpdate")}advance(t){if(!this.isRunning)return;let e=!1;if(this.duration&&this.easing){this.currentTime+=t;let s=oo(0,this.currentTime/this.duration,1);e=s>=1;let i=e?1:this.easing(s);this.value=this.from+(this.to-this.from)*i}else this.lerp?(this.value=ko(this.value,this.to,this.lerp*60,t),Math.round(this.value)===Math.round(this.to)&&(this.value=this.to,e=!0)):(this.value=this.to,e=!0);e&&this.stop(),this.onUpdate?.(this.value,e)}stop(){this.isRunning=!1}fromTo(t,e,{lerp:s,duration:i,easing:o,onStart:r,onUpdate:n}){this.from=this.value=t,this.to=e,this.lerp=s,this.duration=i,this.easing=o,this.currentTime=0,this.isRunning=!0,r?.(),this.onUpdate=n}};function Bo(t,e){let s;return function(...i){clearTimeout(s),s=setTimeout(()=>{s=void 0,t.apply(this,i)},e)}}var Wo=class{constructor(t,e,{autoResize:s=!0,debounce:i=250}={}){g(this,"width",0);g(this,"height",0);g(this,"scrollHeight",0);g(this,"scrollWidth",0);g(this,"debouncedResize");g(this,"wrapperResizeObserver");g(this,"contentResizeObserver");g(this,"resize",()=>{this.onWrapperResize(),this.onContentResize()});g(this,"onWrapperResize",()=>{this.wrapper instanceof Window?(this.width=window.innerWidth,this.height=window.innerHeight):(this.width=this.wrapper.clientWidth,this.height=this.wrapper.clientHeight)});g(this,"onContentResize",()=>{this.wrapper instanceof Window?(this.scrollHeight=this.content.scrollHeight,this.scrollWidth=this.content.scrollWidth):(this.scrollHeight=this.wrapper.scrollHeight,this.scrollWidth=this.wrapper.scrollWidth)});this.wrapper=t,this.content=e,s&&(this.debouncedResize=Bo(this.resize,i),this.wrapper instanceof Window?window.addEventListener("resize",this.debouncedResize):(this.wrapperResizeObserver=new ResizeObserver(this.debouncedResize),this.wrapperResizeObserver.observe(this.wrapper)),this.contentResizeObserver=new ResizeObserver(this.debouncedResize),this.contentResizeObserver.observe(this.content)),this.resize()}destroy(){this.wrapperResizeObserver?.disconnect(),this.contentResizeObserver?.disconnect(),this.wrapper===window&&this.debouncedResize&&window.removeEventListener("resize",this.debouncedResize)}get limit(){return{x:this.scrollWidth-this.width,y:this.scrollHeight-this.height}}},ro=class{constructor(){g(this,"events",{})}emit(t,...e){let s=this.events[t]||[];for(let i=0,o=s.length;i<o;i++)s[i]?.(...e)}on(t,e){return this.events[t]?this.events[t].push(e):this.events[t]=[e],()=>{this.events[t]=this.events[t]?.filter(s=>e!==s)}}off(t,e){this.events[t]=this.events[t]?.filter(s=>e!==s)}destroy(){this.events={}}},Ho=100/6,de={passive:!1};function so(t,e){return t===1?Ho:t===2?e:1}var Xo=class{constructor(t,e={wheelMultiplier:1,touchMultiplier:1}){g(this,"touchStart",{x:0,y:0});g(this,"lastDelta",{x:0,y:0});g(this,"window",{width:0,height:0});g(this,"emitter",new ro);g(this,"onTouchStart",t=>{let{clientX:e,clientY:s}=t.targetTouches?t.targetTouches[0]:t;this.touchStart.x=e,this.touchStart.y=s,this.lastDelta={x:0,y:0},this.emitter.emit("scroll",{deltaX:0,deltaY:0,event:t})});g(this,"onTouchMove",t=>{let{clientX:e,clientY:s}=t.targetTouches?t.targetTouches[0]:t,i=-(e-this.touchStart.x)*this.options.touchMultiplier,o=-(s-this.touchStart.y)*this.options.touchMultiplier;this.touchStart.x=e,this.touchStart.y=s,this.lastDelta={x:i,y:o},this.emitter.emit("scroll",{deltaX:i,deltaY:o,event:t})});g(this,"onTouchEnd",t=>{this.emitter.emit("scroll",{deltaX:this.lastDelta.x,deltaY:this.lastDelta.y,event:t})});g(this,"onWheel",t=>{let{deltaX:e,deltaY:s,deltaMode:i}=t,o=so(i,this.window.width),r=so(i,this.window.height);e*=o,s*=r,e*=this.options.wheelMultiplier,s*=this.options.wheelMultiplier,this.emitter.emit("scroll",{deltaX:e,deltaY:s,event:t})});g(this,"onWindowResize",()=>{this.window={width:window.innerWidth,height:window.innerHeight}});this.element=t,this.options=e,window.addEventListener("resize",this.onWindowResize),this.onWindowResize(),this.element.addEventListener("wheel",this.onWheel,de),this.element.addEventListener("touchstart",this.onTouchStart,de),this.element.addEventListener("touchmove",this.onTouchMove,de),this.element.addEventListener("touchend",this.onTouchEnd,de)}on(t,e){return this.emitter.on(t,e)}destroy(){this.emitter.destroy(),window.removeEventListener("resize",this.onWindowResize),this.element.removeEventListener("wheel",this.onWheel,de),this.element.removeEventListener("touchstart",this.onTouchStart,de),this.element.removeEventListener("touchmove",this.onTouchMove,de),this.element.removeEventListener("touchend",this.onTouchEnd,de)}},io=t=>Math.min(1,1.001-2**(-10*t)),no=class{constructor({wrapper:t=window,content:e=document.documentElement,eventsTarget:s=t,smoothWheel:i=!0,syncTouch:o=!1,syncTouchLerp:r=.075,touchInertiaExponent:n=1.7,duration:a,easing:l,lerp:c=.1,infinite:h=!1,orientation:d="vertical",gestureOrientation:u=d==="horizontal"?"both":"vertical",touchMultiplier:m=1,wheelMultiplier:f=1,autoResize:T=!0,prevent:I,virtualScroll:$,overscroll:U=!0,autoRaf:B=!1,anchors:k=!1,autoToggle:Y=!1,allowNestedScroll:R=!1,__experimental__naiveDimensions:ht=!1,naiveDimensions:Nt=ht,stopInertiaOnNavigate:bt=!1,respectReducedMotion:xt=!0}={}){g(this,"_isScrolling",!1);g(this,"_isStopped",!1);g(this,"_isLocked",!1);g(this,"_preventNextNativeScrollEvent",!1);g(this,"_resetVelocityTimeout",null);g(this,"_rafId",null);g(this,"_isDraggingSelection",!1);g(this,"reducedMotionMediaQuery",window.matchMedia("(prefers-reduced-motion: reduce)"));g(this,"isTouching");g(this,"isIos");g(this,"time",0);g(this,"userData",{});g(this,"lastVelocity",0);g(this,"velocity",0);g(this,"direction",0);g(this,"options");g(this,"targetScroll");g(this,"animatedScroll");g(this,"animate",new zo);g(this,"emitter",new ro);g(this,"dimensions");g(this,"virtualScroll");g(this,"onScrollEnd",t=>{t instanceof CustomEvent||(this.isScrolling==="smooth"||this.isScrolling===!1)&&t.stopPropagation()});g(this,"dispatchScrollendEvent",()=>{this.options.wrapper.dispatchEvent(new CustomEvent("scrollend",{bubbles:this.options.wrapper===window,detail:{lenisScrollEnd:!0}}))});g(this,"onTransitionEnd",t=>{t.propertyName?.includes("overflow")&&t.target===this.rootElement&&this.checkOverflow()});g(this,"onClick",t=>{let e=t.composedPath().filter(i=>i instanceof HTMLAnchorElement&&i.href).map(i=>new URL(i.href)),s=new URL(window.location.href);if(this.options.anchors){let i=e.find(o=>s.host===o.host&&s.pathname===o.pathname&&o.hash);if(i){let o=typeof this.options.anchors=="object"&&this.options.anchors?this.options.anchors:void 0,r=decodeURIComponent(i.hash);this.scrollTo(r,o);return}}if(this.options.stopInertiaOnNavigate&&e.some(i=>s.host===i.host&&s.pathname!==i.pathname)){this.reset();return}});g(this,"onPointerDown",t=>{t.button===1&&this.reset()});g(this,"onVirtualScroll",t=>{if(typeof this.options.virtualScroll=="function"&&this.options.virtualScroll(t)===!1)return;let{deltaX:e,deltaY:s,event:i}=t;if(this.emitter.emit("virtual-scroll",{deltaX:e,deltaY:s,event:i}),i.ctrlKey||i.lenisStopPropagation)return;let o=i.type.includes("touch"),r=i.type.includes("wheel");if(o&&this.isIos&&(i.type==="touchstart"&&(this._isDraggingSelection=this.isTouchOnSelectionHandle(i)),this._isDraggingSelection)){i.type==="touchend"&&(this._isDraggingSelection=!1);return}this.isTouching=i.type==="touchstart"||i.type==="touchmove";let n=e===0&&s===0;if(this.options.syncTouch&&o&&i.type==="touchstart"&&n&&!this.isStopped&&!this.isLocked){this.reset();return}let a=this.options.gestureOrientation==="vertical"&&s===0||this.options.gestureOrientation==="horizontal"&&e===0;if(n||a)return;let l=i.composedPath();l=l.slice(0,l.indexOf(this.rootElement));let c=this.options.prevent,h=Math.abs(e)>=Math.abs(s)?"horizontal":"vertical";if(l.find(f=>f instanceof HTMLElement&&(typeof c=="function"&&c?.(f)||f.hasAttribute?.("data-lenis-prevent")||h==="vertical"&&f.hasAttribute?.("data-lenis-prevent-vertical")||h==="horizontal"&&f.hasAttribute?.("data-lenis-prevent-horizontal")||o&&f.hasAttribute?.("data-lenis-prevent-touch")||r&&f.hasAttribute?.("data-lenis-prevent-wheel")||this.options.allowNestedScroll&&this.hasNestedScroll(f,{deltaX:e,deltaY:s}))))return;if(this.isStopped||this.isLocked){i.cancelable&&i.preventDefault();return}if(!(this.options.syncTouch&&o||this.options.smoothWheel&&r)){this.isScrolling="native",this.animate.stop(),i.lenisStopPropagation=!0;return}let d=s;this.options.gestureOrientation==="both"?d=Math.abs(s)>Math.abs(e)?s:e:this.options.gestureOrientation==="horizontal"&&(d=e),(!this.options.overscroll||this.options.infinite||this.options.wrapper!==window&&this.limit>0&&(this.animatedScroll>0&&this.animatedScroll<this.limit||this.animatedScroll===0&&s>0||this.animatedScroll===this.limit&&s<0))&&(i.lenisStopPropagation=!0),i.cancelable&&i.preventDefault();let u=o&&this.options.syncTouch,m=o&&i.type==="touchend";m&&(d=Math.sign(d)*Math.abs(this.velocity)**this.options.touchInertiaExponent),this.scrollTo(this.targetScroll+d,{programmatic:!1,...u?{lerp:m?this.options.syncTouchLerp:1}:{lerp:this.options.lerp,duration:this.options.duration,easing:this.options.easing}})});g(this,"onNativeScroll",()=>{if(this._resetVelocityTimeout!==null&&(clearTimeout(this._resetVelocityTimeout),this._resetVelocityTimeout=null),this._preventNextNativeScrollEvent){this._preventNextNativeScrollEvent=!1;return}if(this.isScrolling===!1||this.isScrolling==="native"){let t=this.animatedScroll;this.animatedScroll=this.targetScroll=this.actualScroll,this.lastVelocity=this.velocity,this.velocity=this.animatedScroll-t,this.direction=Math.sign(this.animatedScroll-t),this.isStopped||(this.isScrolling="native"),this.emit(),this.velocity!==0&&(this._resetVelocityTimeout=setTimeout(()=>{this.lastVelocity=this.velocity,this.velocity=0,this.isScrolling=!1,this.emit()},400))}});g(this,"raf",t=>{let e=t-(this.time||t);this.time=t,this.animate.advance(e*.001),this.options.autoRaf&&(this._rafId=requestAnimationFrame(this.raf))});window.lenisVersion=eo,window.lenis||(window.lenis={}),window.lenis.version=eo,d==="horizontal"&&(window.lenis.horizontal=!0),o===!0&&(window.lenis.touch=!0),this.isIos=/(iPad|iPhone|iPod)/g.test(navigator.userAgent),(!t||t===document.documentElement)&&(t=window),typeof a=="number"&&typeof l!="function"?l=io:typeof l=="function"&&typeof a!="number"&&(a=1),this.options={wrapper:t,content:e,eventsTarget:s,smoothWheel:i,syncTouch:o,syncTouchLerp:r,touchInertiaExponent:n,duration:a,easing:l,lerp:c,infinite:h,gestureOrientation:u,orientation:d,touchMultiplier:m,wheelMultiplier:f,autoResize:T,prevent:I,virtualScroll:$,overscroll:U,autoRaf:B,anchors:k,autoToggle:Y,allowNestedScroll:R,naiveDimensions:Nt,stopInertiaOnNavigate:bt,respectReducedMotion:xt},this.dimensions=new Wo(t,e,{autoResize:T}),this.updateClassName(),this.targetScroll=this.animatedScroll=this.actualScroll,this.options.wrapper.addEventListener("scroll",this.onNativeScroll),this.options.wrapper.addEventListener("scrollend",this.onScrollEnd,{capture:!0}),(this.options.anchors||this.options.stopInertiaOnNavigate)&&this.options.wrapper.addEventListener("click",this.onClick),this.options.wrapper.addEventListener("pointerdown",this.onPointerDown),this.virtualScroll=new Xo(s,{touchMultiplier:m,wheelMultiplier:f}),this.virtualScroll.on("scroll",this.onVirtualScroll),this.options.autoToggle&&(this.checkOverflow(),this.rootElement.addEventListener("transitionend",this.onTransitionEnd)),this.options.autoRaf&&(this._rafId=requestAnimationFrame(this.raf))}destroy(){this.emitter.destroy(),this.options.wrapper.removeEventListener("scroll",this.onNativeScroll),this.options.wrapper.removeEventListener("scrollend",this.onScrollEnd,{capture:!0}),this.options.wrapper.removeEventListener("pointerdown",this.onPointerDown),(this.options.anchors||this.options.stopInertiaOnNavigate)&&this.options.wrapper.removeEventListener("click",this.onClick),this.virtualScroll.destroy(),this.dimensions.destroy(),this.cleanUpClassName(),this._rafId&&cancelAnimationFrame(this._rafId)}on(t,e){return this.emitter.on(t,e)}off(t,e){return this.emitter.off(t,e)}get overflow(){let t=this.isHorizontal?"overflow-x":"overflow-y";return getComputedStyle(this.rootElement)[t]}checkOverflow(){["hidden","clip"].includes(this.overflow)?this.internalStop():this.internalStart()}setScroll(t){this.isHorizontal?this.options.wrapper.scrollTo({left:t,behavior:"instant"}):this.options.wrapper.scrollTo({top:t,behavior:"instant"})}isTouchOnSelectionHandle(t){let e=window.getSelection();if(!e||e.isCollapsed||e.rangeCount===0)return!1;let s=t.targetTouches[0]??t.changedTouches[0];if(!s)return!1;let i=e.getRangeAt(0).getClientRects();if(i.length===0)return!1;let o=i[0],r=i[i.length-1],n=40,a=Math.hypot(s.clientX-o.left,s.clientY-o.top)<=n,l=Math.hypot(s.clientX-r.right,s.clientY-r.bottom)<=n;return a||l}resize(){this.dimensions.resize(),this.animatedScroll=this.targetScroll=this.actualScroll,this.emit()}emit(){this.emitter.emit("scroll",this)}reset(){this.isLocked=!1,this.isScrolling=!1,this.animatedScroll=this.targetScroll=this.actualScroll,this.lastVelocity=this.velocity=0,this.animate.stop()}start(){if(this.isStopped){if(this.options.autoToggle){this.rootElement.style.removeProperty("overflow");return}this.internalStart()}}internalStart(){this.isStopped&&(this.reset(),this.isStopped=!1,this.emit())}stop(){if(!this.isStopped){if(this.options.autoToggle){this.rootElement.style.setProperty("overflow","clip");return}this.internalStop()}}internalStop(){this.isStopped||(this.reset(),this.isStopped=!0,this.emit())}scrollTo(t,{offset:e=0,immediate:s=!1,lock:i=!1,programmatic:o=!0,lerp:r=o?this.options.lerp:void 0,duration:n=o?this.options.duration:void 0,easing:a=o?this.options.easing:void 0,onStart:l,onComplete:c,force:h=!1,userData:d}={}){if(this.prefersReducedMotion&&(o?s=!0:(r=1,n=void 0,a=void 0)),(this.isStopped||this.isLocked)&&!h)return;let u=t,m=e;if(typeof u=="string"&&["top","left","start","#"].includes(u))u=0;else if(typeof u=="string"&&["bottom","right","end"].includes(u))u=this.limit;else{let f=null;if(typeof u=="string"?(f=u.startsWith("#")?document.getElementById(u.slice(1)):document.querySelector(u),f||(u==="#top"?u=0:console.warn("Lenis: Target not found",u))):u instanceof HTMLElement&&u?.nodeType&&(f=u),f){if(this.options.wrapper!==window){let k=this.rootElement.getBoundingClientRect();m-=this.isHorizontal?k.left:k.top}let T=f.getBoundingClientRect(),I=getComputedStyle(f),$=this.isHorizontal?Number.parseFloat(I.scrollMarginLeft):Number.parseFloat(I.scrollMarginTop),U=getComputedStyle(this.rootElement),B=this.isHorizontal?Number.parseFloat(U.scrollPaddingLeft):Number.parseFloat(U.scrollPaddingTop);u=(this.isHorizontal?T.left:T.top)+this.animatedScroll-(Number.isNaN($)?0:$)-(Number.isNaN(B)?0:B)}}if(typeof u=="number"){if(u+=m,this.options.infinite){if(o){this.targetScroll=this.animatedScroll=this.scroll;let f=u-this.animatedScroll;f>this.limit/2?u-=this.limit:f<-this.limit/2&&(u+=this.limit)}}else u=oo(0,u,this.limit);if(u===this.targetScroll){l?.(this),c?.(this);return}if(this.userData=d??{},s){this.animatedScroll=this.targetScroll=u,this.setScroll(this.scroll),this.reset(),this.preventNextNativeScrollEvent(),this.emit(),c?.(this),this.userData={},requestAnimationFrame(()=>{this.dispatchScrollendEvent()});return}o||(this.targetScroll=u),typeof n=="number"&&typeof a!="function"?a=io:typeof a=="function"&&typeof n!="number"&&(n=1),this.animate.fromTo(this.animatedScroll,u,{duration:n,easing:a,lerp:r,onStart:()=>{i&&(this.isLocked=!0),this.isScrolling="smooth",l?.(this)},onUpdate:(f,T)=>{this.isScrolling="smooth",this.lastVelocity=this.velocity,this.velocity=f-this.animatedScroll,this.direction=Math.sign(this.velocity),this.animatedScroll=f,this.setScroll(this.scroll),o&&(this.targetScroll=f),T||this.emit(),T&&(this.reset(),this.emit(),c?.(this),this.userData={},requestAnimationFrame(()=>{this.dispatchScrollendEvent()}),this.preventNextNativeScrollEvent())}})}}preventNextNativeScrollEvent(){this._preventNextNativeScrollEvent=!0,requestAnimationFrame(()=>{this._preventNextNativeScrollEvent=!1})}hasNestedScroll(t,{deltaX:e,deltaY:s}){let i=Date.now();t._lenis||(t._lenis={});let o=t._lenis,r,n,a,l,c,h,d,u,m,f;if(i-(o.time??0)>2e3){o.time=Date.now();let R=window.getComputedStyle(t);if(o.computedStyle=R,r=["auto","overlay","scroll"].includes(R.overflowX),n=["auto","overlay","scroll"].includes(R.overflowY),c=["auto"].includes(R.overscrollBehaviorX),h=["auto"].includes(R.overscrollBehaviorY),o.hasOverflowX=r,o.hasOverflowY=n,!(r||n))return!1;d=t.scrollWidth,u=t.scrollHeight,m=t.clientWidth,f=t.clientHeight,a=d>m,l=u>f,o.isScrollableX=a,o.isScrollableY=l,o.scrollWidth=d,o.scrollHeight=u,o.clientWidth=m,o.clientHeight=f,o.hasOverscrollBehaviorX=c,o.hasOverscrollBehaviorY=h}else a=o.isScrollableX,l=o.isScrollableY,r=o.hasOverflowX,n=o.hasOverflowY,d=o.scrollWidth,u=o.scrollHeight,m=o.clientWidth,f=o.clientHeight,c=o.hasOverscrollBehaviorX,h=o.hasOverscrollBehaviorY;if(!(r&&a||n&&l))return!1;let T=Math.abs(e)>=Math.abs(s)?"horizontal":"vertical",I,$,U,B,k,Y;if(T==="horizontal")I=Math.round(t.scrollLeft),$=d-m,U=e,B=r,k=a,Y=c;else if(T==="vertical")I=Math.round(t.scrollTop),$=u-f,U=s,B=n,k=l,Y=h;else return!1;return!Y&&(I>=$||I<=0)?!0:(U>0?I<$:I>0)&&B&&k}get rootElement(){return this.options.wrapper===window?document.documentElement:this.options.wrapper}get limit(){return this.options.naiveDimensions?this.isHorizontal?this.rootElement.scrollWidth-this.rootElement.clientWidth:this.rootElement.scrollHeight-this.rootElement.clientHeight:this.dimensions.limit[this.isHorizontal?"x":"y"]}get isHorizontal(){return this.options.orientation==="horizontal"}get actualScroll(){let t=this.options.wrapper;return this.isHorizontal?t.scrollX??t.scrollLeft:t.scrollY??t.scrollTop}get scroll(){return this.options.infinite?Fo(this.animatedScroll,this.limit):this.animatedScroll}get progress(){return this.limit===0?1:this.scroll/this.limit}get isScrolling(){return this._isScrolling}set isScrolling(t){this._isScrolling!==t&&(this._isScrolling=t,this.updateClassName())}get isStopped(){return this._isStopped}set isStopped(t){this._isStopped!==t&&(this._isStopped=t,this.updateClassName())}get isLocked(){return this._isLocked}set isLocked(t){this._isLocked!==t&&(this._isLocked=t,this.updateClassName())}get isSmooth(){return this.isScrolling==="smooth"}get prefersReducedMotion(){return this.options.respectReducedMotion&&this.reducedMotionMediaQuery.matches}get className(){let t="lenis";return this.options.autoToggle&&(t+=" lenis-autoToggle"),this.isStopped&&(t+=" lenis-stopped"),this.isLocked&&(t+=" lenis-locked"),this.isScrolling&&(t+=" lenis-scrolling"),this.isScrolling==="smooth"&&(t+=" lenis-smooth"),t}updateClassName(){this.cleanUpClassName(),this.className.split(" ").forEach(t=>{this.rootElement.classList.add(t)})}cleanUpClassName(){for(let t of Array.from(this.rootElement.classList))(t==="lenis"||t.startsWith("lenis-"))&&this.rootElement.classList.remove(t)}};window.WP={anime:{animate:zs,createTimeline:Ws,utils:Ts,stagger:Ze},Lenis:no};})();
+/*! Bundled license information:
+
+animejs/dist/modules/core/consts.js:
+animejs/dist/modules/core/globals.js:
+animejs/dist/modules/core/helpers.js:
+animejs/dist/modules/core/transforms.js:
+animejs/dist/modules/core/colors.js:
+animejs/dist/modules/core/values.js:
+animejs/dist/modules/core/render.js:
+animejs/dist/modules/core/styles.js:
+animejs/dist/modules/core/clock.js:
+animejs/dist/modules/core/targets.js:
+animejs/dist/modules/core/units.js:
+  (**
+   * Anime.js - core - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/adapters/registry.js:
+  (**
+   * Anime.js - adapters - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/animation/additive.js:
+animejs/dist/modules/animation/composition.js:
+animejs/dist/modules/animation/animation.js:
+  (**
+   * Anime.js - animation - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/engine/engine.js:
+  (**
+   * Anime.js - engine - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/timer/timer.js:
+  (**
+   * Anime.js - timer - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/easings/none.js:
+animejs/dist/modules/easings/eases/parser.js:
+  (**
+   * Anime.js - easings - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/timeline/position.js:
+animejs/dist/modules/timeline/timeline.js:
+  (**
+   * Anime.js - timeline - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/utils/number.js:
+animejs/dist/modules/utils/target.js:
+animejs/dist/modules/utils/time.js:
+animejs/dist/modules/utils/chainable.js:
+animejs/dist/modules/utils/random.js:
+animejs/dist/modules/utils/stagger.js:
+animejs/dist/modules/utils/index.js:
+  (**
+   * Anime.js - utils - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/waapi/composition.js:
+  (**
+   * Anime.js - waapi - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+
+animejs/dist/modules/index.js:
+  (**
+   * Anime.js - ESM
+   * @version v4.5.0
+   * @license MIT
+   * @copyright 2026 - Julian Garnier
+   *)
+*/
+</script>
+<!-- vendor:end -->
 <script>
 (() => {
 'use strict';
@@ -667,6 +925,97 @@ const pool = (() => {
   };
 })();
 
+/* ══ 動效層 ═════════════════════════════════════════════════════════════
+   引擎:anime.js 4.5(72k★ MIT)+ lenis 1.3(15k★ MIT),由 esbuild 在建置時
+   打包內嵌,執行時不連外。出處與授權見 THIRD-PARTY.md。
+
+   三條紀律:
+   1. **引擎沒載到,頁面照樣完整可用。** 所有動效都是「先確認 WP 存在才做」,
+      而且絕不先把東西藏起來再靠 JS 放出來 —— 那樣 JS 一掛就變空白頁。
+   2. **prefers-reduced-motion 是整套關掉**,不是放慢。
+   3. **只動 transform 與 opacity**,不動 width/height/top/left,避免 layout thrash。 */
+const MOTION = (() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const lib = window.WP || null;
+  const on = () => !!lib && !reduce.matches;
+  let lenis = null;
+
+  function smoothScroll() {
+    if (!on() || !lib.Lenis || lenis) return;
+    try {
+      lenis = new lib.Lenis({ duration: 0.9, smoothWheel: true, syncTouch: false });
+      const tick = (t) => { lenis.raf(t); requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    } catch (e) { lenis = null; }
+  }
+
+  function backdrop() {
+    if (!on()) return;
+    const { animate } = lib.anime;
+    animate('#blob-a', { translateX: 16, translateY: -12, scale: 1.22, rotate: 22,
+      duration: 19000, alternate: true, loop: true, ease: 'inOutSine' });
+    animate('#blob-b', { translateX: -20, translateY: 14, scale: 0.86, rotate: -18,
+      duration: 23000, alternate: true, loop: true, ease: 'inOutSine' });
+  }
+
+  /* 捲動進場。注意順序:先確認引擎在,才把卡片壓成透明 —— 反過來寫的話
+     引擎載入失敗就會留下一頁看不見的卡片。 */
+  function reveal(nodes) {
+    if (!on() || !nodes.length) return;
+    const { animate, utils, stagger } = lib.anime;
+    const io = new IntersectionObserver((entries, obs) => {
+      const shown = entries.filter((e) => e.isIntersecting).map((e) => e.target);
+      if (!shown.length) return;
+      shown.forEach((n) => obs.unobserve(n));
+      animate(shown, {
+        opacity: [0, 1], translateY: [18, 0], scale: [0.985, 1],
+        duration: 460, delay: stagger(55), ease: 'out(3)',
+        onComplete: () => shown.forEach((n) => { n.style.willChange = 'auto'; }),
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.01 });
+    for (const n of nodes) { utils.set(n, { opacity: 0 }); io.observe(n); }
+    // 保險:IntersectionObserver 沒觸發(容器被隱藏、瀏覽器怪癖、rootMargin 算錯)
+    // 的話,卡片會永遠停在透明 —— 那是典型的靜默失敗:畫面看起來只是「空的」,
+    // 沒有人會知道是動效壞了。1.2 秒後一律強制顯示。
+    setTimeout(() => {
+      for (const n of nodes) {
+        if (n.isConnected && parseFloat(getComputedStyle(n).opacity) < 0.99) {
+          io.unobserve(n);
+          utils.set(n, { opacity: 1, translateY: 0, scale: 1 });
+        }
+      }
+    }, 1200);
+  }
+
+  /* 數字用滾的,不要直接跳。只在數值真的變了的時候跑。 */
+  function countTo(node, to) {
+    const from = parseInt(node.textContent, 10);
+    if (!on() || isNaN(from) || from === to) { node.textContent = String(to); return; }
+    const box = { n: from };
+    lib.anime.animate(box, { n: to, duration: 620, ease: 'out(3)',
+      onUpdate: () => { node.textContent = String(Math.round(box.n)); },
+      onComplete: () => { node.textContent = String(to); } });
+  }
+
+  /* 附議的手感:水滴被按下去再彈回來 */
+  function press(node) {
+    if (!on()) return;
+    lib.anime.animate(node, { scale: [1, 0.9, 1.06, 1], duration: 420, ease: 'out(4)' });
+  }
+
+  function pop(node) {
+    if (!on()) return;
+    lib.anime.animate(node, { scale: [1, 1.1, 1], duration: 300, ease: 'out(3)' });
+  }
+
+  reduce.addEventListener('change', () => {
+    if (reduce.matches && lenis) { try { lenis.destroy(); } catch (e) {} lenis = null; }
+  });
+
+  return { smoothScroll, backdrop, reveal, countTo, press, pop,
+           available: !!lib, enabled: on };
+})();
+
 /* ══ 狀態 ═══════════════════════════════════════════════════════════════ */
 const state = {
   mode: 'loading',      // 'live' = 有後端可寫;'static' = 唯讀展示
@@ -866,9 +1215,12 @@ async function refreshRound() {
 /* ══ 列表 ═══════════════════════════════════════════════════════════════ */
 function renderStats(s) {
   if (!s) return;
-  $('s-wishes').textContent = s.wishes ?? '–';
-  $('s-votes').textContent = s.votes ?? '–';
-  $('s-granted').textContent = s.granted ?? '–';
+  for (const [id, v] of [['s-wishes', s.wishes], ['s-votes', s.votes],
+                         ['s-granted', s.granted]]) {
+    const node = $(id);
+    if (typeof v === 'number') MOTION.countTo(node, v);
+    else node.textContent = v ?? '–';
+  }
 }
 
 /* 標籤列的詞彙表必須是**全池**的,不能用篩選後的結果重算 ——
@@ -895,7 +1247,7 @@ function renderTags() {
     const b = el('button', { type: 'button', class: hueClass(tag),
                              text: '#' + tag + ' ' + n,
                              'aria-pressed': state.tag === tag ? 'true' : 'false' });
-    b.addEventListener('click', () => setTag(state.tag === tag ? '' : tag));
+    b.addEventListener('click', () => { MOTION.pop(b); setTag(state.tag === tag ? '' : tag); });
     bar.appendChild(b);
   }
 }
@@ -970,12 +1322,12 @@ function renderList(append) {
     ]));
   } else {
     const start = append ? list.querySelectorAll('.wish').length : 0;
-    state.wishes.slice(start).forEach((w, i) => {
+    const fresh = state.wishes.slice(start).map((w) => {
       const li = card(w);
-      // 進場依序上浮,最多錯開 8 張(再多就變成在等畫面)
-      li.style.setProperty('--i', String(Math.min(i, 8)));
       list.appendChild(li);
+      return li;
     });
+    MOTION.reveal(fresh);   // 捲到才進場;引擎沒載到就是直接顯示
   }
   markLeader();
   attachExpanders();
@@ -1039,6 +1391,7 @@ async function load(append) {
 async function doVote(w, btn) {
   if (btn.disabled) return;
   btn.disabled = true;
+  MOTION.press(btn);
   try {
     const data = await api('api/wishes/' + w.id + '/vote', { method: 'POST' });
     w.votes = data.votes;
@@ -1174,6 +1527,8 @@ function showModeNotice() {
 /* ══ 啟動 ═══════════════════════════════════════════════════════════════ */
 async function boot() {
   $('repo-link').href = CONFIG.repo;
+  MOTION.smoothScroll();
+  MOTION.backdrop();
   try {
     const health = await api('api/health');
     state.mode = 'live';

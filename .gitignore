@@ -6,6 +6,11 @@ data/ip_salt
 *.env
 .env
 
+# 建置產物與依賴:vendor 打包結果會被內嵌進 public/index.html 一起進版控,
+# 但打包中間檔與 node_modules 不進來。
+node_modules/
+build/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -34,8 +34,15 @@ python3 scripts/check_contrast.py           # 改過顏色就一定要跑
 
 幾條這個專案的硬規矩:
 
-- **零依賴。** 後端只用 Python 標準函式庫,前端不外連任何東西(沒有 CDN、沒有字型、沒有分析)。
-  這不是潔癖 —— 是為了讓任何人 clone 下來就能跑、離線也能跑。
+- **執行時零依賴、零外部請求。** 後端只用 Python 標準函式庫;前端的動畫引擎是**建置時**
+  打包內嵌進 `public/index.html`,不從 CDN 拉。頁面不外連任何東西(沒有 CDN、沒有字型、
+  沒有分析)。這不是潔癖 —— 是為了讓任何人 clone 下來就能跑、離線也能跑。
+- **要動 vendor 就要重新 build 並 commit。** 改了 `src/vendor.js` 之後跑
+  `npm install && npm run build`,把重新產生的 `public/index.html` 一起提交;
+  CI 會比對,脫節就紅。`public/index.html` 的 vendor 標記區塊**不可以手改**。
+- **加新的第三方套件要先確認授權。** 只收 OSI 認可的(MIT/BSD/Apache-2.0),
+  並且要在 `THIRD-PARTY.md` 署名 —— CI 會檢查每個執行時依賴都有列進去。
+  已經評估過而排除的(animate.css 是 Hippocratic 2.1、Hover.css 商用需付費)不要再提。
 - **前端永遠不碰 `innerHTML`。** 使用者內容一律 `textContent`。自我測試會掃原始碼,加回去就變紅。
 - **改了防護就要改 `MUTATIONS`。** `scripts/selftest.py` 底部那張表用**內容錨點**定位程式碼,
   錨點對不上會直接失敗而不是安靜跳過。這是故意的。

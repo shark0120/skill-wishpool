@@ -1,0 +1,23 @@
+{
+  "name": "skill-wishpool",
+  "version": "2.0.0",
+  "description": "Skill 許願池 — 聯署制的 AI skill 願望池。前端動畫依賴在建置時打包進單一 HTML,執行時零外部請求。",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shark0120/skill-wishpool.git"
+  },
+  "private": false,
+  "scripts": {
+    "build": "esbuild src/vendor.js --bundle --minify --format=iife --target=es2020 --outfile=build/vendor.min.js && python3 scripts/build.py",
+    "build:win": "esbuild src/vendor.js --bundle --minify --format=iife --target=es2020 --outfile=build/vendor.min.js && python scripts/build.py",
+    "check": "python3 scripts/check_contrast.py && python3 scripts/selftest.py"
+  },
+  "dependencies": {
+    "animejs": "^4.5.0",
+    "lenis": "^1.3.26"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
+  }
+}

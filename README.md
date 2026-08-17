@@ -3,7 +3,18 @@
 > 你想要什麼 AI skill?丟一個願望進池子,大家聯署。**每三天結算一次,票最高的那一個就做成 skill。**
 
 任何人都能許願、都能附議 —— 不用註冊、不用登入、不放 cookie、不做追蹤。
-一支 Python 檔 + 一頁 HTML,零外部依賴(不用 npm、不用 Docker、不用資料庫伺服器)。
+一支 Python 檔 + 一頁 HTML,不用 Docker、不用資料庫伺服器。
+
+**依賴講清楚:**
+
+- **跑起來不需要任何依賴。** 後端只用 Python 3.9+ 標準函式庫;前端就是一個已經建好、
+  進了版控的 `public/index.html`。clone 下來 `python3 server.py` 就會動,不用 `pip install`,
+  也不用 `npm install`。
+- **執行時零外部請求。** 前端的動畫引擎(anime.js、lenis)是**建置時**用 esbuild 打包並
+  內嵌進那一頁 HTML 的,不是從 CDN 拉的。使用者的瀏覽器不會連任何外部網站,離線也能開。
+- **只有要改動畫引擎才需要 npm。** 那時跑 `npm install && npm run build`。
+  CI 會驗版控裡那份 HTML 真的是從 `src/vendor.js` 建出來的。
+- 授權與出處見 [THIRD-PARTY.md](THIRD-PARTY.md)。
 
 **線上的池子:<https://skill-tw.com>**
 
@@ -20,7 +31,13 @@ python3 server.py --seed
 ```
 
 打開 <http://127.0.0.1:8787> 就有一個可以許願、可以附議、會倒數的池子。
-沒有 `pip install` 這一步 —— 只用 Python 3.9+ 標準函式庫。
+沒有 `pip install`、也沒有 `npm install` 這一步 —— 頁面是建好的,後端只用標準函式庫。
+
+要改前端動畫引擎才需要 Node:
+
+```bash
+npm install && npm run build     # esbuild 打包 → 內嵌進 public/index.html
+```
 
 ---
 
@@ -185,7 +202,13 @@ Windows / Python 3.14 上 94 項全綠,在 Ubuntu / Python 3.10 上穩定紅 4 �
 - **水池是 canvas 畫的**,不是圖檔:水面波紋一直在動,有人許願或附議時會落一滴水
   濺起漣漪。顏色從 CSS 變數讀,所以跟著亮暗模式走;`prefers-reduced-motion` 時
   只畫一格靜態畫面;分頁切到背景就停止動畫,但**不清畫布**(不然回來會看到空白)。
-- 整頁不到 300 個 DOM 節點,程式碼本身零外部請求(CDN 的注入見上一節)。
+- **超高響應式。** 320 / 768 / 1280 都實測過:手機單欄、桌機「釘住的側欄 + 主欄 +
+  願望卡兩欄」、超寬螢幕三欄;root 字級用 `clamp()` 流動,下限鎖 16px。
+- **動態。** anime.js 做捲動進場與數字滾動、lenis 做慣性捲動、canvas 做三色極光水池,
+  背景兩團極光緩慢漂移。形狀刻意不規則:水池是 SVG 波浪切邊、附議鈕是有機水滴、
+  願望卡左右交錯不對稱圓角、聯署框是會轉的漸層描邊。
+  無限循環的 CSS 動畫上限 4 個(有量尺盯著),而且只動 `transform` 與 `opacity`。
+- 執行時零外部請求(CDN 的注入見上一節)。
 
 ## 想改成別的主題?
 
@@ -209,7 +232,15 @@ MIT。拿去改、拿去架、拿去商用都可以,不用問我。
 co-sign others; **every 3 days the top-voted wish gets built into an actual skill.**
 
 No signup, no cookies, no tracking. One Python file (stdlib only, 3.9+) plus one
-self-contained HTML page — no npm, no Docker, no database server.
+self-contained HTML page — no Docker, no database server.
+
+**Dependencies, stated precisely:** running it needs nothing installed — the backend is
+Python stdlib and `public/index.html` ships built and committed, so `python3 server.py`
+just works. The front-end animation engines (anime.js, lenis — both MIT) are bundled
+**at build time** with esbuild and inlined into that one HTML file, so the browser still
+makes zero external requests and the page works offline. You only need `npm install &&
+npm run build` if you want to change the animation engines. CI verifies the committed
+HTML really is the output of `src/vendor.js`. See [THIRD-PARTY.md](THIRD-PARTY.md).
 
 ```bash
 python3 server.py --seed     # http://127.0.0.1:8787

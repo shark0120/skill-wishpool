@@ -301,21 +301,49 @@ def suite_core(c, src_root):
              "sha256-" in csp and "'unsafe-inline'" not in csp, csp[:200])
         c.ok("有 nosniff", headers.get("X-Content-Type-Options") == "nosniff")
 
-        # 前端原始碼層的 XSS 防線:一旦有人加了 innerHTML,這條就會紅。
+        # ── 前端原始碼層的防線 ─────────────────────────────────────
         with open(os.path.join(src_root, "public", "index.html"), "r",
                   encoding="utf-8") as fh:
             page = fh.read()
-        # 找的是真正的注入接口(`.innerHTML` / `.outerHTML` / insertAdjacentHTML /
-        # document.write),不是註解裡提到的字。加了任何一個,使用者輸入就有可能
-        # 被當成 HTML 執行,這條會立刻紅。
+
+        # 第三方動畫引擎是 esbuild 打包進來的壓縮碼,裡面本來就有 innerHTML 之類的
+        # 東西。掃注入接口時要把它切掉,否則這條永遠是紅的、然後就會被關掉 ——
+        # 但**切掉的部分要另外驗**(下面三條),不能變成盲點。
+        VSTART = "<!-- vendor:start"
+        VEND = "<!-- vendor:end -->"
+        c.eq("vendor 標記剛好各一個", (page.count(VSTART), page.count(VEND)), (1, 1))
+        if VSTART in page and VEND in page:
+            head, rest = page.split(VSTART, 1)
+            vendor, tail = rest.split(VEND, 1)
+            app = head + tail
+        else:
+            vendor, app = "", page
+
+        # 找的是真正的注入接口,而且只看**手寫的那部分**。加了任何一個,
+        # 使用者輸入就有可能被當成 HTML 執行,這條會立刻紅。
         sinks = [s for s in (".innerHTML", ".outerHTML", "insertAdjacentHTML",
-                             "document.write", "eval(") if s in page]
-        c.ok("前端沒有用到 HTML 注入接口", not sinks,
-             "index.html 出現 %s,使用者輸入可能被當成 HTML 執行" % ", ".join(sinks))
-        c.ok("前端沒有外部請求",
+                             "document.write", "eval(") if s in app]
+        c.ok("手寫前端沒有用到 HTML 注入接口", not sinks,
+             "index.html 的非 vendor 區塊出現 %s" % ", ".join(sinks))
+
+        # 整頁(含第三方)都不准出現外連 —— 打包的意義就是執行時不連外。
+        c.ok("整頁沒有外部資源網址",
              not any(s in page for s in ("//cdn.", "https://fonts.", "http://cdn.",
-                                         "unpkg.com", "jsdelivr")),
+                                         "unpkg.com", "jsdelivr", "//esm.sh")),
              "index.html 出現外部資源")
+        c.ok("vendor 區塊真的有東西", len(vendor) > 20000, "%d 位元組" % len(vendor))
+        # 體積上限:打包很容易一路長大,超過就要有人做決定,不要靜靜變肥。
+        c.ok("整頁不超過 200KB", len(page.encode("utf-8")) < 200 * 1024,
+             "%.1f KB" % (len(page.encode("utf-8")) / 1024))
+
+        # 動效預算:無限循環的 CSS 動畫每一幀都在燒電。列表上每張卡一個的那種
+        # 尤其致命(12 張卡 = 12 個)。手寫 CSS 裡的 `infinite` 不准超過 4 個。
+        infinite = app.count("infinite")
+        c.ok("無限循環動畫不超過 4 個", infinite <= 4, "手寫 CSS 裡有 %d 個" % infinite)
+        # reduced-motion 必須整套關掉,不是放慢
+        c.ok("有尊重 prefers-reduced-motion",
+             "prefers-reduced-motion:reduce" in app.replace(" ", ""),
+             "找不到 reduced-motion 區塊")
 
         # 管理端
         status, _, _ = req(p, "POST", "/api/admin/wishes/%d" % wish_id, {"status": "granted"})
