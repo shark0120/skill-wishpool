@@ -29,72 +29,76 @@ html{font-size:clamp(16px,0.94rem + 0.22vw,17.5px)}
    --chip-fg-N / --chip-bg-N 是 8 色標籤盤,由標籤名字雜湊決定,
    所以同一個標籤永遠是同一個顏色。check_contrast.py 會自動掃出來逐對驗。  */
 :root{
-  --bg:#F2F7F9; --bg2:#E4EEF2; --card:#FFFFFF;
-  --ink:#0E2027; --soft:#33525E; --faint:#4F6B76;
-  --rule:#CFE0E7; --line-strong:#5F8794;
-  --accent:#0A6C87; --accent-ink:#FFFFFF; --focus:#0A6C87;
-  --c-aurora:#5B3FBF; --c-flare:#9A4A0C;
-  --good:#17654A; --warn:#8A4A12;
-  --pool1:rgba(10,108,135,.10); --pool2:rgba(91,63,191,.07);
-  --shadow:0 1px 2px rgba(14,32,39,.06),0 8px 24px rgba(14,32,39,.05);
-  --chip-fg-0:hsl(195 74% 25%); --chip-bg-0:hsl(195 62% 93%);
-  --chip-fg-1:hsl(262 55% 42%); --chip-bg-1:hsl(262 70% 94%);
-  --chip-fg-2:hsl(330 60% 36%); --chip-bg-2:hsl(330 70% 94%);
-  --chip-fg-3:hsl(12 68% 38%);  --chip-bg-3:hsl(12 78% 93%);
-  --chip-fg-4:hsl(38 92% 26%);  --chip-bg-4:hsl(38 85% 90%);
-  --chip-fg-5:hsl(95 60% 24%);  --chip-bg-5:hsl(95 55% 90%);
-  --chip-fg-6:hsl(158 72% 24%); --chip-bg-6:hsl(158 55% 90%);
-  --chip-fg-7:hsl(222 62% 40%); --chip-bg-7:hsl(222 75% 94%);
+  --bg:#F7F5F2; --bg2:#EFEBE4; --card:#FFFFFF;
+  --ink:#171717; --soft:#4F4F4F; --faint:#655F57;
+  --rule:#DED8CE; --line-strong:#8A8175;
+  --accent:#6E2639; --accent-ink:#FFFFFF; --focus:#6E2639;
+  --c-aurora:#4A3F35; --c-flare:#7B5D18;
+  --good:#2F5D3A; --warn:#8C3A1E;
+  --gold-1:#C9A227; --gold-2:#E7D6A8;   /* 只給描邊/漸層用的金,不拿來寫字 */
+  --pool1:rgba(201,162,39,.13); --pool2:rgba(110,38,57,.07);
+  --shadow:0 1px 2px rgba(23,23,23,.05),0 10px 30px rgba(23,23,23,.06);
+  --chip-fg-0:hsl(45 78% 24%);  --chip-bg-0:hsl(45 62% 91%);
+  --chip-fg-1:hsl(350 58% 34%); --chip-bg-1:hsl(350 60% 94%);
+  --chip-fg-2:hsl(318 45% 33%); --chip-bg-2:hsl(318 48% 94%);
+  --chip-fg-3:hsl(20 62% 32%);  --chip-bg-3:hsl(20 62% 92%);
+  --chip-fg-4:hsl(95 48% 24%);  --chip-bg-4:hsl(95 42% 91%);
+  --chip-fg-5:hsl(162 62% 22%); --chip-bg-5:hsl(162 42% 91%);
+  --chip-fg-6:hsl(202 62% 27%); --chip-bg-6:hsl(202 52% 92%);
+  --chip-fg-7:hsl(265 42% 38%); --chip-bg-7:hsl(265 48% 94%);
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --bg:#08161C; --bg2:#0D2028; --card:#112832;
-    --ink:#DEEAEF; --soft:#A2BCC5; --faint:#82A0AB;
-    --rule:#1F3B47; --line-strong:#4E7D8C;
-    --accent:#63CFE6; --accent-ink:#04222B; --focus:#63CFE6;
-    --c-aurora:#A78BFA; --c-flare:#F0A868;
-    --good:#63D6A4; --warn:#E0A76A;
-    --pool1:rgba(99,207,230,.10); --pool2:rgba(167,139,250,.07);
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
-    --chip-fg-0:hsl(195 70% 74%); --chip-bg-0:hsl(195 45% 17%);
-    --chip-fg-1:hsl(262 75% 80%); --chip-bg-1:hsl(262 35% 22%);
-    --chip-fg-2:hsl(330 70% 78%); --chip-bg-2:hsl(330 32% 21%);
-    --chip-fg-3:hsl(12 80% 74%);  --chip-bg-3:hsl(12 38% 20%);
-    --chip-fg-4:hsl(38 85% 68%);  --chip-bg-4:hsl(38 45% 17%);
-    --chip-fg-5:hsl(95 55% 70%);  --chip-bg-5:hsl(95 30% 16%);
-    --chip-fg-6:hsl(158 60% 68%); --chip-bg-6:hsl(158 38% 15%);
-    --chip-fg-7:hsl(222 80% 80%); --chip-bg-7:hsl(222 40% 22%);
+    --bg:#0E0C0A; --bg2:#151109; --card:#1B1610;
+    --ink:#F1ECE2; --soft:#C6BCAA; --faint:#A09684;
+    --rule:#332B1F; --line-strong:#786D58;
+    --accent:#E6C77A; --accent-ink:#1B1610; --focus:#E6C77A;
+    --c-aurora:#DFA895; --c-flare:#F5DFA4;
+    --good:#8FCFA1; --warn:#E8A87C;
+    --gold-1:#D9B84A; --gold-2:#F0E0B0;
+    --pool1:rgba(230,199,122,.12); --pool2:rgba(223,168,149,.08);
+    --shadow:0 1px 2px rgba(0,0,0,.55),0 12px 34px rgba(0,0,0,.42);
+    --chip-fg-0:hsl(45 72% 70%);  --chip-bg-0:hsl(45 32% 15%);
+    --chip-fg-1:hsl(350 62% 74%); --chip-bg-1:hsl(350 26% 18%);
+    --chip-fg-2:hsl(318 48% 74%); --chip-bg-2:hsl(318 24% 18%);
+    --chip-fg-3:hsl(20 66% 70%);  --chip-bg-3:hsl(20 30% 16%);
+    --chip-fg-4:hsl(95 42% 66%);  --chip-bg-4:hsl(95 22% 14%);
+    --chip-fg-5:hsl(162 48% 64%); --chip-bg-5:hsl(162 28% 13%);
+    --chip-fg-6:hsl(202 52% 68%); --chip-bg-6:hsl(202 30% 16%);
+    --chip-fg-7:hsl(265 46% 74%); --chip-bg-7:hsl(265 24% 19%);
   }
 }
 :root[data-theme=light]{
-  --bg:#F2F7F9;--bg2:#E4EEF2;--card:#FFFFFF;--ink:#0E2027;--soft:#33525E;--faint:#4F6B76;
-  --rule:#CFE0E7;--line-strong:#5F8794;--accent:#0A6C87;--accent-ink:#FFFFFF;--focus:#0A6C87;
-  --c-aurora:#5B3FBF;--c-flare:#9A4A0C;
-  --good:#17654A;--warn:#8A4A12;--pool1:rgba(10,108,135,.10);--pool2:rgba(91,63,191,.07);
-  --shadow:0 1px 2px rgba(14,32,39,.06),0 8px 24px rgba(14,32,39,.05);
-  --chip-fg-0:hsl(195 74% 25%); --chip-bg-0:hsl(195 62% 93%);
-  --chip-fg-1:hsl(262 55% 42%); --chip-bg-1:hsl(262 70% 94%);
-  --chip-fg-2:hsl(330 60% 36%); --chip-bg-2:hsl(330 70% 94%);
-  --chip-fg-3:hsl(12 68% 38%);  --chip-bg-3:hsl(12 78% 93%);
-  --chip-fg-4:hsl(38 92% 26%);  --chip-bg-4:hsl(38 85% 90%);
-  --chip-fg-5:hsl(95 60% 24%);  --chip-bg-5:hsl(95 55% 90%);
-  --chip-fg-6:hsl(158 72% 24%); --chip-bg-6:hsl(158 55% 90%);
-  --chip-fg-7:hsl(222 62% 40%); --chip-bg-7:hsl(222 75% 94%);
+  --bg:#F7F5F2;--bg2:#EFEBE4;--card:#FFFFFF;--ink:#171717;--soft:#4F4F4F;--faint:#655F57;
+  --rule:#DED8CE;--line-strong:#8A8175;--accent:#6E2639;--accent-ink:#FFFFFF;--focus:#6E2639;
+  --c-aurora:#4A3F35;--c-flare:#7B5D18;--good:#2F5D3A;--warn:#8C3A1E;
+  --gold-1:#C9A227;--gold-2:#E7D6A8;
+  --pool1:rgba(201,162,39,.13);--pool2:rgba(110,38,57,.07);
+  --shadow:0 1px 2px rgba(23,23,23,.05),0 10px 30px rgba(23,23,23,.06);
+  --chip-fg-0:hsl(45 78% 24%);  --chip-bg-0:hsl(45 62% 91%);
+  --chip-fg-1:hsl(350 58% 34%); --chip-bg-1:hsl(350 60% 94%);
+  --chip-fg-2:hsl(318 45% 33%); --chip-bg-2:hsl(318 48% 94%);
+  --chip-fg-3:hsl(20 62% 32%);  --chip-bg-3:hsl(20 62% 92%);
+  --chip-fg-4:hsl(95 48% 24%);  --chip-bg-4:hsl(95 42% 91%);
+  --chip-fg-5:hsl(162 62% 22%); --chip-bg-5:hsl(162 42% 91%);
+  --chip-fg-6:hsl(202 62% 27%); --chip-bg-6:hsl(202 52% 92%);
+  --chip-fg-7:hsl(265 42% 38%); --chip-bg-7:hsl(265 48% 94%);
 }
 :root[data-theme=dark]{
-  --bg:#08161C;--bg2:#0D2028;--card:#112832;--ink:#DEEAEF;--soft:#A2BCC5;--faint:#82A0AB;
-  --rule:#1F3B47;--line-strong:#4E7D8C;--accent:#63CFE6;--accent-ink:#04222B;--focus:#63CFE6;
-  --c-aurora:#A78BFA;--c-flare:#F0A868;
-  --good:#63D6A4;--warn:#E0A76A;--pool1:rgba(99,207,230,.10);--pool2:rgba(167,139,250,.07);
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
-  --chip-fg-0:hsl(195 70% 74%); --chip-bg-0:hsl(195 45% 17%);
-  --chip-fg-1:hsl(262 75% 80%); --chip-bg-1:hsl(262 35% 22%);
-  --chip-fg-2:hsl(330 70% 78%); --chip-bg-2:hsl(330 32% 21%);
-  --chip-fg-3:hsl(12 80% 74%);  --chip-bg-3:hsl(12 38% 20%);
-  --chip-fg-4:hsl(38 85% 68%);  --chip-bg-4:hsl(38 45% 17%);
-  --chip-fg-5:hsl(95 55% 70%);  --chip-bg-5:hsl(95 30% 16%);
-  --chip-fg-6:hsl(158 60% 68%); --chip-bg-6:hsl(158 38% 15%);
-  --chip-fg-7:hsl(222 80% 80%); --chip-bg-7:hsl(222 40% 22%);
+  --bg:#0E0C0A;--bg2:#151109;--card:#1B1610;--ink:#F1ECE2;--soft:#C6BCAA;--faint:#A09684;
+  --rule:#332B1F;--line-strong:#786D58;--accent:#E6C77A;--accent-ink:#1B1610;--focus:#E6C77A;
+  --c-aurora:#DFA895;--c-flare:#F5DFA4;--good:#8FCFA1;--warn:#E8A87C;
+  --gold-1:#D9B84A;--gold-2:#F0E0B0;
+  --pool1:rgba(230,199,122,.12);--pool2:rgba(223,168,149,.08);
+  --shadow:0 1px 2px rgba(0,0,0,.55),0 12px 34px rgba(0,0,0,.42);
+  --chip-fg-0:hsl(45 72% 70%);  --chip-bg-0:hsl(45 32% 15%);
+  --chip-fg-1:hsl(350 62% 74%); --chip-bg-1:hsl(350 26% 18%);
+  --chip-fg-2:hsl(318 48% 74%); --chip-bg-2:hsl(318 24% 18%);
+  --chip-fg-3:hsl(20 66% 70%);  --chip-bg-3:hsl(20 30% 16%);
+  --chip-fg-4:hsl(95 42% 66%);  --chip-bg-4:hsl(95 22% 14%);
+  --chip-fg-5:hsl(162 48% 64%); --chip-bg-5:hsl(162 28% 13%);
+  --chip-fg-6:hsl(202 52% 68%); --chip-bg-6:hsl(202 30% 16%);
+  --chip-fg-7:hsl(265 46% 74%); --chip-bg-7:hsl(265 24% 19%);
 }
 /* 標籤色相:JS 依標籤名字雜湊指派 h0–h7,同名永遠同色 */
 .h0{--cf:var(--chip-fg-0);--cb:var(--chip-bg-0)}
@@ -107,6 +111,14 @@ html{font-size:clamp(16px,0.94rem + 0.22vw,17.5px)}
 .h7{--cf:var(--chip-fg-7);--cb:var(--chip-bg-7)}
 
 /* ══ 版面 ══════════════════════════════════════════════════════════════ */
+/* 借用老師網站(hansunarchitects.com)的排版語言:襯線大標配寬字距、內文無襯線、
+   髮絲級分隔線、圓角只有 2px。字體只用系統內建 —— Cormorant Garamond 是
+   Google Fonts,外連違反「零外部請求」,所以用系統襯線堆疊做同一件事。 */
+:root{
+  --font-display:"Noto Serif TC","Songti TC","Source Han Serif TC",Georgia,"Times New Roman",serif;
+  --r:2px;              /* 圓角:老師的站是 2px,幾乎直角 */
+  --hair:1px;           /* 髮絲線 */
+}
 body{
   background:var(--bg); color:var(--ink); min-height:100dvh;
   font-family:"PingFang TC","Heiti TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
@@ -114,12 +126,18 @@ body{
   padding:0 max(1rem,env(safe-area-inset-left)) calc(4.5rem + env(safe-area-inset-bottom));
   overflow-x:hidden;
 }
-/* 背景的靜態漸層留著當底,上面再疊會動的 #bg-blobs */
+/* 底層:兩道金色光暈。上面再疊會動的 #bg-blobs,最上面一層細顆粒。 */
 body::before{
-  content:''; position:fixed; inset:0; z-index:-2; pointer-events:none;
+  content:''; position:fixed; inset:0; z-index:-3; pointer-events:none;
   background:
-    radial-gradient(58rem 26rem at 50% -10rem, var(--pool1), transparent 70%),
-    radial-gradient(36rem 20rem at 8% 6rem, var(--pool2), transparent 70%);
+    radial-gradient(62rem 30rem at 50% -12rem, var(--pool1), transparent 68%),
+    radial-gradient(40rem 24rem at 6% 10rem, var(--pool2), transparent 70%),
+    radial-gradient(34rem 22rem at 96% 62%, var(--pool1), transparent 72%);
+}
+/* 細顆粒:讓大片底色像紙而不是色塊。內嵌 data URI,不算外部請求。 */
+body::after{
+  content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .wrap{max-width:46rem;margin:0 auto}
 
@@ -153,14 +171,20 @@ body::before{
 
 /* 標題走一條水藍→極光紫→焰橘的漸層。漸層兩端都是實測過的語意色,
    而且瀏覽器不支援 background-clip:text 時會退回 --ink,不會變成看不見的字。*/
-h1{font-size:clamp(1.75rem,6.5vw,2.5rem);line-height:1.2;font-weight:700;letter-spacing:-.01em;
-   color:var(--ink);
-   background:linear-gradient(100deg,var(--accent) 0%,var(--c-aurora) 52%,var(--c-flare) 100%);
+/* 大標:襯線 + 寬字距 + 鎏金漸層。漸層兩端都是實測過的語意色(ink 與 c-flare),
+   不支援 background-clip:text 時退回 --ink,不會變成看不見的字。 */
+h1{font-family:var(--font-display);font-size:clamp(1.9rem,7vw,3.1rem);line-height:1.18;
+   font-weight:500;letter-spacing:.09em;color:var(--ink);
+   background:linear-gradient(100deg,var(--ink) 0%,var(--c-flare) 46%,var(--ink) 100%);
    -webkit-background-clip:text;background-clip:text}
 @supports ((-webkit-background-clip:text) or (background-clip:text)){
   h1{color:transparent}
 }
-h2{font-size:1.05rem;line-height:1.4;font-weight:600;margin:0}
+/* 標題下的鎏金髮絲線 */
+.hair{height:1px;margin:.9rem auto 0;max-width:11rem;
+      background:linear-gradient(90deg,transparent,var(--gold-1),transparent)}
+h2{font-family:var(--font-display);font-size:1.14rem;line-height:1.45;font-weight:600;
+   letter-spacing:.02em;margin:0}
 p{color:var(--soft)}
 .meta{font-size:.82rem;color:var(--faint);line-height:1.6}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
@@ -370,8 +394,8 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
   background:radial-gradient(closest-side,var(--pool2),transparent 70%)}
 .thanks-label{font-size:.8rem;letter-spacing:.42em;text-indent:.42em;text-transform:uppercase;
   color:var(--c-flare);font-weight:700;margin:0}
-.thanks-name{font-size:clamp(1.2rem,3.6vw,1.6rem);font-weight:700;color:var(--ink);
-  margin:.35rem 0 0;line-height:1.3}
+.thanks-name{font-family:var(--font-display);font-size:clamp(1.45rem,4.4vw,2rem);
+  font-weight:600;letter-spacing:.1em;color:var(--ink);margin:.45rem 0 0;line-height:1.3}
 .thanks-note{font-size:.9rem;color:var(--soft);margin:.4rem auto 0;max-width:26rem}
 .thanks-link{margin:.9rem auto 0;border-radius:1.4rem .4rem 1.4rem .4rem;
   border-color:var(--rule);font-weight:600}
@@ -423,12 +447,49 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
 @keyframes sheen{0%,55%{transform:translateX(-120%)}85%,100%{transform:translateX(120%)}}
 
 /* 背景:兩團緩慢變形的極光,取代原本的靜態徑向漸層 */
-#bg-blobs{position:fixed;inset:0;z-index:-1;pointer-events:none;width:100%;height:100%;
-          filter:blur(2px)}
-#blob-a{fill:var(--accent);opacity:.12}
-#blob-b{fill:var(--c-aurora);opacity:.11}
+#bg-blobs{position:fixed;inset:0;z-index:-2;pointer-events:none;width:100%;height:100%;
+          filter:blur(3px)}
+#blob-a{fill:var(--gold-1);opacity:.16}
+#blob-b{fill:var(--accent);opacity:.10}
 
 .list .wish{will-change:transform,opacity}
+
+/* ══ 奢華語言:近乎直角 + 髮絲線 + 鎏金 ═══════════════════════════════
+   借老師網站的手法:圓角 2px、分隔線細到幾乎看不見、大量留白,
+   顏色克制,金只出現在描邊與漸層 —— 金色文字在淺底上過不了對比,
+   所以金一律不拿來寫字(--gold-* 只給邊框與漸層用)。            */
+button,.btn,.wish,.round,.compose,.stat,.notice,.toast,.chip,.badge,.skeleton,
+.tags-bar button,.wish-cta,.compose-actions .primary,.thanks,.thanks-link,
+input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
+.list .wish:nth-child(odd),.list .wish:nth-child(even){border-radius:var(--r)}
+
+/* 附議鈕:寶石切面。clip-path 會把 outline 一起切掉,所以焦點框改用內描邊。 */
+/* align-self:flex-start —— 不加的話 flex 預設 stretch 會把它拉成整張卡的高度
+   (實測 58×220)。當圓角方塊時看不太出來,切成寶石形就整個歪掉。 */
+.vote{clip-path:polygon(50% 0,100% 26%,100% 74%,50% 100%,0 74%,0 26%);border-radius:0;
+      align-self:flex-start;min-height:66px}
+.vote:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--focus)}
+
+/* 聯署框與致謝卡的鎏金描邊 */
+.round{background:linear-gradient(var(--card),var(--card)) padding-box,
+       conic-gradient(from var(--ang),var(--gold-1),var(--accent) 32%,
+                      var(--gold-2) 58%,var(--gold-1)) border-box}
+.thanks{background:linear-gradient(var(--card),var(--card)) padding-box,
+        linear-gradient(115deg,var(--gold-1),var(--accent) 48%,var(--gold-2)) border-box}
+.round::before{background:linear-gradient(90deg,var(--gold-1),var(--accent) 50%,var(--gold-2))}
+
+/* 卡片:去掉厚陰影,改用髮絲邊 + 極淡投影,像壓紋卡紙 */
+.wish,.compose,.stat,.round,.thanks{border-color:var(--rule)}
+.wish{box-shadow:0 1px 1px rgba(0,0,0,.03)}
+.wish.is-leader{box-shadow:inset 3px 0 0 var(--c-flare),0 1px 1px rgba(0,0,0,.03)}
+
+/* 小標一律大寫寬字距 —— 這是奢侈品網站最好認的一個記號 */
+.stat span,.round-idx,.thanks-label{letter-spacing:.22em;text-transform:uppercase;
+  font-size:.74rem}
+.stat span{color:var(--faint)}
+.stat b{font-family:var(--font-display);font-weight:600;font-size:1.5rem;letter-spacing:.02em}
+.round-idx{color:var(--c-flare)}
+.clock{font-family:var(--font-display);letter-spacing:.04em}
 
 /* ══ 有滑鼠才給的手感 ══════════════════════════════════════════════════
    用 hover:hover 隔離 —— 觸控裝置套 hover 會變成「按一下先觸發 hover
@@ -486,6 +547,7 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
 
   <header>
     <h1>Skill 許願池</h1>
+    <div class="hair" aria-hidden="true"></div>
     <p class="tagline">你想要什麼 AI skill?丟進池子,大家聯署。<b
       id="rule-line">每三天結算一次,票最高的那一個就做成 skill。</b>不用註冊。</p>
 
@@ -577,8 +639,9 @@ footer p{color:var(--faint);font-size:.86rem;margin:0}
 
   <section class="thanks" aria-labelledby="thanks-h">
     <p class="thanks-label" id="thanks-h">特別感謝</p>
-    <p class="thanks-name">我的設計老師</p>
-    <p class="thanks-note">這個站的視覺方向、配色節奏與版面手感,是跟他學的。</p>
+    <p class="thanks-name">我的 CODEX 之神</p>
+    <p class="thanks-note">Codex 玩得比誰都好。這個站的視覺方向、配色節奏與版面手感,
+      是跟他學的。</p>
     <a class="btn thanks-link" href="https://www.facebook.com/yan.shi.lun.933337/"
        target="_blank" rel="noopener noreferrer">到老師的 Facebook<svg class="i"
        aria-hidden="true"><use href="#i-link"/></svg></a>
