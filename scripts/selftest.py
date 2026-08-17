@@ -483,6 +483,42 @@ def suite_rounds(c, src_root):
         c.eq("提前結算後第二名也出線", data["wish"]["status"], "planned")
 
 
+def suite_read_after_write(c, src_root):
+    """寫完馬上讀:回應送出時,交易一定要已經提交了。
+
+    這一節在盯一個真的發生過的 bug:handler 原本在 `with connect()` **裡面**就
+    send_json,而 commit 是離開區塊才發生 —— 客戶端拿到 201 之後立刻發的下一個
+    請求,可能用另一條連線讀到還沒有這筆資料的舊快照。症狀是「剛許的願不見了」。
+
+    它在 Windows 上剛好贏得 race 所以測不出來,在 Linux 上穩定失敗。所以這裡跑
+    多輪、中間不 sleep,把時間差壓到最小。
+    """
+    env = {"WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
+           "WISHPOOL_TRUST_PROXY": 1}
+    with Server(src_root, env, label="raw") as srv:
+        p = srv.port
+        missing_after_create, missing_vote = [], []
+        for i in range(10):
+            _, data, _ = req(p, "POST", "/api/wishes",
+                             {"title": "寫完馬上讀測試願望編號 %02d" % i})
+            wid = (data.get("wish") or {}).get("id")
+            # 中間刻意不睡:這就是重點
+            _, listing, _ = req(p, "GET", "/api/wishes?limit=200&sort=new")
+            if not any(w["id"] == wid for w in listing.get("wishes", [])):
+                missing_after_create.append(wid)
+
+            _, vd, _ = req(p, "POST", "/api/wishes/%d/vote" % wid,
+                           headers={"X-Forwarded-For": "198.51.100.%d" % (100 + i)})
+            _, one, _ = req(p, "GET", "/api/wishes/%d" % wid)
+            if one.get("wish", {}).get("votes") != vd.get("votes"):
+                missing_vote.append((wid, vd.get("votes"), one.get("wish", {}).get("votes")))
+        c.eq("許願後立刻查列表,10 次都看得到", missing_after_create, [])
+        c.eq("附議後立刻查單筆,票數 10 次都一致", missing_vote, [])
+
+        _, listing, _ = req(p, "GET", "/api/wishes?limit=200")
+        c.eq("10 筆都真的在資料庫裡", listing["total"], 10)
+
+
 def suite_csp_modes(c, src_root):
     """CSP 的三種模式。
 
@@ -568,8 +604,9 @@ def read_db_text(db_path):
 
 def run_all(src_root):
     c = Checks()
-    for suite in (suite_core, suite_rate_limit, suite_rate_limit_race, suite_rounds,
-                  suite_csp_modes, suite_readonly, suite_admin_disabled):
+    for suite in (suite_core, suite_rate_limit, suite_rate_limit_race,
+                  suite_read_after_write, suite_rounds, suite_csp_modes,
+                  suite_readonly, suite_admin_disabled):
         try:
             suite(c, src_root)
         except Exception as exc:  # 一節炸掉不要影響其他節,但要記成失敗
@@ -580,6 +617,11 @@ def run_all(src_root):
 
 # ── 反向對照:拆掉防護,這套測試必須紅 ────────────────────────────────
 
+# 這張表用**內容錨點**定位程式碼,錨點對不上會直接失敗而不是安靜跳過 —— 故意的。
+#
+# 有一個防護刻意**不放**在這裡:「回應必須在交易提交之後才送出」。把它改壞的效果
+# 是時間相依的(在贏得 race 的機器上照樣會綠),要求它必須變紅會讓 --verify-gauge
+# 自己開始閃。盯著它的是 suite_read_after_write 的多輪無延遲讀寫。
 MUTATIONS = [
     ("拿掉標題長度上限",
      "    if len(title) > TITLE_MAX_LEN:", "    if False:"),

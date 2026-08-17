@@ -736,6 +736,7 @@ class Handler(BaseHTTPRequestHandler):
             status = {
                 "rate_limited": 429, "readonly": 403, "unauthorized": 401,
                 "admin_disabled": 503, "too_large": 413, "duplicate_hidden": 409,
+                "not_found": 404,
             }.get(exc.code, 400)
             return self.send_err(status, exc.message, exc.code, exc.field)
         except BrokenPipeError:
@@ -745,11 +746,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_err(500, "伺服器出錯了,已記錄。", "server_error")
 
     def api(self, path, query):
+        """⚠️ 所有 handler 都遵守一條規則:**先讓交易提交,才送出回應。**
+
+        `with connect() as conn:` 是在離開區塊時才 commit。如果在區塊**裡面**就把
+        回應寫進 socket,客戶端拿到 201 之後馬上發的下一個請求,可能在 commit 之前
+        就用另一條連線讀到舊快照 —— 於是「剛許的願不見了」。
+        這個 bug 在 Windows 上剛好贏得 race 所以測不出來,在 Linux 上就穩定失敗。
+        所以:payload 在 with 裡面組好,send_json 一律寫在 with 外面。
+        """
         method = "GET" if self.command == "HEAD" else self.command
 
         if path == "/api/health" and method == "GET":
             with connect() as conn:
-                return self.send_json(200, {
+                payload = {
                     "ok": True, "version": VERSION, "readonly": CFG["readonly"],
                     "admin": bool(CFG["admin_token"]), "stats": stats(conn),
                     "round": round_payload(conn),
@@ -759,7 +768,8 @@ class Handler(BaseHTTPRequestHandler):
                         "tag_max_count": TAG_MAX_COUNT, "tag_max_len": TAG_MAX_LEN,
                         "wishes_per_hour": RATE_WISH_MAX, "votes_per_hour": RATE_VOTE_MAX,
                     },
-                })
+                }
+            return self.send_json(200, payload)
 
         if path == "/api/wishes" and method == "GET":
             q = clean_text(query.get("q", [""])[0], 80)
@@ -775,16 +785,18 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as conn:
                 ensure_rounds(conn)
                 items, total = list_wishes(conn, q, status, tag, sort, limit, offset)
-                return self.send_json(200, {
+                payload = {
                     "ok": True, "wishes": items, "total": total,
                     "limit": limit, "offset": offset, "sort": sort,
                     "stats": stats(conn), "tags": tag_counts(conn),
                     "readonly": CFG["readonly"],
-                })
+                }
+            return self.send_json(200, payload)
 
         if path == "/api/round" and method == "GET":
             with connect() as conn:
-                return self.send_json(200, {"ok": True, "round": round_payload(conn)})
+                payload = {"ok": True, "round": round_payload(conn)}
+            return self.send_json(200, payload)
 
         if path == "/api/wishes" and method == "POST":
             self.guard_write()
@@ -803,25 +815,31 @@ class Handler(BaseHTTPRequestHandler):
                     rate_record(conn, ip_hash, "vote")
                     row = conn.execute("SELECT * FROM wishes WHERE id=?",
                                        (dup["id"],)).fetchone()
-                    return self.send_json(200, {
+                    merged = {
                         "ok": True, "merged": True, "already_voted": already,
                         "votes": votes, "wish": row_to_wish(row),
                         "message": "有人許過一樣的願了,幫你加上一票。",
-                    })
-                ts = now_sql()
-                cur = conn.execute(
-                    "INSERT INTO wishes(title,norm_title,detail,tags,author,status,"
-                    "votes,created_at,updated_at,ip_hash) "
-                    "VALUES(?,?,?,?,?,'open',0,?,?,?)",
-                    (fields["title"], fields["norm_title"], fields["detail"],
-                     fields["tags"], fields["author"], ts, ts, ip_hash),
-                )
-                wish_id = cur.lastrowid
-                register_vote(conn, wish_id, ip_hash)  # 許願的人自動算一票
-                rate_record(conn, ip_hash, "wish")
-                row = conn.execute("SELECT * FROM wishes WHERE id=?", (wish_id,)).fetchone()
-                return self.send_json(201, {"ok": True, "merged": False,
-                                            "wish": row_to_wish(row)})
+                    }
+                else:
+                    merged = None
+                    ts = now_sql()
+                    cur = conn.execute(
+                        "INSERT INTO wishes(title,norm_title,detail,tags,author,status,"
+                        "votes,created_at,updated_at,ip_hash) "
+                        "VALUES(?,?,?,?,?,'open',0,?,?,?)",
+                        (fields["title"], fields["norm_title"], fields["detail"],
+                         fields["tags"], fields["author"], ts, ts, ip_hash),
+                    )
+                    wish_id = cur.lastrowid
+                    register_vote(conn, wish_id, ip_hash)  # 許願的人自動算一票
+                    rate_record(conn, ip_hash, "wish")
+                    row = conn.execute("SELECT * FROM wishes WHERE id=?",
+                                       (wish_id,)).fetchone()
+                    created = {"ok": True, "merged": False, "wish": row_to_wish(row)}
+            # 交易在這一行之前才提交,回應在提交之後才送出(見 api() 開頭的說明)
+            if merged is not None:
+                return self.send_json(200, merged)
+            return self.send_json(201, created)
 
         m = re.fullmatch(r"/api/wishes/(\d+)/vote", path)
         if m and method == "POST":
@@ -833,12 +851,12 @@ class Handler(BaseHTTPRequestHandler):
                 row = conn.execute("SELECT id,status FROM wishes WHERE id=?",
                                    (wish_id,)).fetchone()
                 if row is None or row["status"] == "hidden":
-                    return self.send_err(404, "找不到這個願望。", "not_found")
+                    raise Invalid("找不到這個願望。", "not_found")
                 rate_check(conn, ip_hash, "vote", RATE_VOTE_MAX, RATE_VOTE_WINDOW)
                 votes, already = register_vote(conn, wish_id, ip_hash)
                 rate_record(conn, ip_hash, "vote")
-                return self.send_json(200, {"ok": True, "votes": votes,
-                                            "already_voted": already})
+                payload = {"ok": True, "votes": votes, "already_voted": already}
+            return self.send_json(200, payload)
 
         m = re.fullmatch(r"/api/wishes/(\d+)", path)
         if m and method == "GET":
@@ -879,7 +897,7 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as conn:
                 cur = conn.execute("UPDATE wishes SET %s WHERE id=?" % ",".join(sets), args)
                 if cur.rowcount == 0:
-                    return self.send_err(404, "找不到這個願望。", "not_found")
+                    raise Invalid("找不到這個願望。", "not_found")
                 row = conn.execute("SELECT * FROM wishes WHERE id=?", (wish_id,)).fetchone()
             return self.send_json(200, {"ok": True, "wish": row_to_wish(row)})
 
@@ -890,8 +908,9 @@ class Handler(BaseHTTPRequestHandler):
                               "need_confirm")
             with connect() as conn:
                 cur = conn.execute("DELETE FROM wishes WHERE id=?", (int(m.group(1)),))
-            if cur.rowcount == 0:
-                return self.send_err(404, "找不到這個願望。", "not_found")
+                gone = cur.rowcount
+            if gone == 0:
+                raise Invalid("找不到這個願望。", "not_found")
             return self.send_json(200, {"ok": True, "deleted": int(m.group(1))})
 
         if path == "/api/admin/round/close" and method == "POST":
@@ -912,8 +931,9 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as conn:
                 items, total = list_wishes(conn, sort="new", limit=200,
                                            include_hidden=True)
-                return self.send_json(200, {"ok": True, "wishes": items, "total": total,
-                                            "stats": stats(conn)})
+                payload = {"ok": True, "wishes": items, "total": total,
+                           "stats": stats(conn)}
+            return self.send_json(200, payload)
 
         return self.send_err(404, "沒有這個 API。", "not_found")
 
