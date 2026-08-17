@@ -141,12 +141,23 @@ python3 scripts/selftest.py --verify-gauge  # 反向對照:把防護拆掉,確�
 python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實算 WCAG 對比度
 ```
 
-`--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、輪次得標判定**改壞,然後要求同一套測試**必須失敗**。
+`--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、速率限制的寫入鎖、輪次得標判定**這六個防護改壞,然後要求同一套測試**必須失敗**。
 一套永遠會綠的測試比沒有測試更危險 —— 這一步就是在防那個。
 
-> 開發時它真的抓到過一個假綠燈:目錄逃脫測試原本用 `urllib` 發 `/../x`,但 `urllib`
-> 會先把路徑正規化成 `/x`,所以那條測試從來沒送出過 `..`。現在改用原始 socket,
-> 而且目標刻意選副檔名在白名單內的檔案,不然會被副檔名檢查擋掉、量不到真正那道防線。
+開發過程中這套機制真的抓到三件事:
+
+> **假綠燈:** 目錄逃脫測試原本用 `urllib` 發 `/../x`,但 `urllib` 會先把路徑正規化成
+> `/x`,所以那條測試從來沒送出過 `..` —— 把逃脫檢查整段拆掉,測試照樣全綠。現在改用
+> 原始 socket,而且目標刻意選副檔名在白名單內的檔案,不然會被副檔名白名單擋掉、
+> 量不到真正那道防線。
+>
+> **真漏洞:** 速率限制是「先數再寫」,原本沒有鎖 —— 20 個並行請求在上限 5 的池子裡
+> **全部**拿到 201。現在檢查與寫入在同一個 `BEGIN IMMEDIATE` 交易裡,並加了一條
+> 並行測試盯著它。
+>
+> **會閃的測試:** 輪次測試原本 sleep 固定秒數,大約每三次紅一次。會閃的測試跟假綠燈
+> 一樣糟 —— CI 隨機變紅之後,大家就開始忽略紅燈。現在改成先確認票真的投進去了,
+> 再輪詢等結算。
 
 ---
 
@@ -194,8 +205,11 @@ python3 server.py --seed     # http://127.0.0.1:8787
 - **Anti-abuse**: per-source rate limits in SQLite, one vote per source per wish enforced by
   a DB unique key, duplicate-title merging, input sanitisation, hash-based CSP, fail-closed
   admin endpoints. Raw IPs are never stored — only `sha256(salt + ip)`.
-- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (84 checks).
-  `--verify-gauge` sabotages five guards and requires the suite to go red, so the suite
-  can't quietly become a rubber stamp.
+- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (90 checks).
+  `--verify-gauge` sabotages six guards and requires the suite to go red, so the suite
+  can't quietly become a rubber stamp. It has already caught a false green (a traversal
+  test that never actually sent `..`, because `urllib` normalises the path), a real hole
+  (the rate limiter was check-then-act with no lock, so 20 parallel requests all got
+  through a limit of 5), and a flaky test (fixed-`sleep` round settlement).
 
 See the tables above for the full API and configuration; MIT licensed.
