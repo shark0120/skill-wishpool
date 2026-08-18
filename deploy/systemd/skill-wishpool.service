@@ -3,29 +3,25 @@ Description=Skill 許願池
 Documentation=https://github.com/shark0120/skill-wishpool
 After=network-online.target
 Wants=network-online.target
+# 失敗重啟不能無限迴圈:5 分鐘內失敗 5 次就停下來,讓問題現形而不是一直重生。
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=wishpool
 Group=wishpool
 WorkingDirectory=/opt/skill-wishpool
-
-# 只綁 127.0.0.1 —— 對外一律走反向代理。直接綁 0.0.0.0 的話,
-# WISHPOOL_TRUST_PROXY 就會變成任何人都能用 X-Forwarded-For 繞過速率限制。
 ExecStart=/usr/bin/python3 /opt/skill-wishpool/server.py \
     --host 127.0.0.1 --port 8787 \
     --db /var/lib/skill-wishpool/wishes.db \
     --cycle-days 3
-
-# 權杖與其他設定放這裡,權限設 0600。前面的 "-" 表示檔案不存在也能啟動
-# (管理端會自己 fail-closed 回 503,不會變成誰都能改)。
 EnvironmentFile=-/etc/skill-wishpool.env
-
-Restart=on-failure
+# always 而非 on-failure:行程若因為未預期的原因乾淨退出(exit 0),
+# on-failure 會讓它就這樣躺著不起來,站台靜默死亡。
+Restart=always
 RestartSec=3
 
-# ── 收緊權限 ──────────────────────────────────────────────────────────
-# 這個服務只需要:讀 /opt/skill-wishpool、寫 /var/lib/skill-wishpool、開一個 TCP port。
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes
@@ -33,16 +29,34 @@ ProtectSystem=strict
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
+ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
 RestrictAddressFamilies=AF_INET AF_INET6
 RestrictNamespaces=yes
 RestrictSUIDSGID=yes
+RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
+UMask=0077
 ReadWritePaths=/var/lib/skill-wishpool
+
+# 這個服務只聽 127.0.0.1,而且設計上零外部請求 —— 它沒有任何理由對外連線。
+# 封掉出向網路,萬一應用層被打穿也帶不走資料、拉不進第二階段程式。
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1
+
+# 資源上限:每個連線一條執行緒,不設上限等於把整台機器的執行緒交給匿名訪客。
+TasksMax=256
+MemoryMax=768M
 
 [Install]
 WantedBy=multi-user.target

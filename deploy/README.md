@@ -96,11 +96,33 @@ curl -s -H 'X-Forwarded-For: 1.2.3.4' https://wish.example.com/api/health -o /de
 
 鹽掉了不會弄壞資料,但既有的「一人一票」關聯會全部斷掉(大家可以重複附議一次)。
 
-SQLite 是 WAL 模式,**不要直接 `cp` 熱資料庫**:
+SQLite 是 WAL 模式,**不要直接 `cp` 熱資料庫** —— 會拿到撕裂的檔。要走線上備份 API:
 
 ```bash
 sqlite3 /var/lib/skill-wishpool/wishes.db ".backup '/tmp/wishes-$(date +%F).db'"
 ```
+
+倉庫裡有一支做完整流程的腳本(一致性快照 → 驗完整性 → 驗筆數 → 壓縮 → 保留 30 天):
+
+```bash
+sudo install -m 700 deploy/backup.sh /usr/local/bin/wishpool-backup
+sudo crontab -e
+# 5 3 * * * /usr/local/bin/wishpool-backup >> /var/log/wishpool-backup.log 2>&1
+```
+
+**驗這一步不能省。** 沒驗過的備份等於沒有備份 —— 你會在還原那天才發現它是壞的,
+而那天你沒有第二次機會。腳本裡驗兩層,因為 `integrity_check` 對一個「結構完好的
+空殼」也會回 `ok`,所以還要比對筆數。
+
+### 鹽要不要跟資料庫放一起?預設是不要
+
+資料庫存的是 `ip_hash` 不是 IP。但 IPv4 只有 43 億個 —— **只要拿到 `ip_salt`,
+幾分鐘就能把整份 `ip_hash` 反推回真實 IP**。兩個放同一包備份,等於這包一旦外流
+就是一份訪客 IP 名單。
+
+`deploy/backup.sh` 因此只備資料庫。代價是還原後「一人一票」的關聯會斷掉
+(每個人可以再附議一次)、速率限制歸零。要保留連續性就把 `ip_salt` 另外備份到
+**不同的位置**,不要跟資料庫同一包。
 
 ## 更新
 

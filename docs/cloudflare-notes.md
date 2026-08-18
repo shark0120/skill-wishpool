@@ -82,15 +82,27 @@ Cloudflare 上有三個開關會改寫 HTML:
 | **Rocket Loader** | 改寫 `<script>` → 雜湊必炸,整頁死 | 關 |
 | **Auto Minify (HTML)** | 改寫 inline 區塊 → 雜湊必炸 | 關 |
 | **Web Analytics** | 注入 `beacon.min.js` → 被 CSP 擋掉,每次載入留一則 console 錯誤 | 關(否則違反零外部請求) |
+| **Email Obfuscation** | 頁面出現 email 時,把它改寫成 `<a href="/cdn-cgi/l/email-protection">` 並注入解碼 script → 雜湊炸掉 | **關**,理由見下 |
 
-我們實測 Web Analytics 是開著的,注入的 beacon **被 CSP 擋下來了**:
+最後那一個是四個裡面最陰的,因為它**平常不會發作**。
 
+前三個一開就永遠改寫 HTML,你第一次載入就會發現。Email Obfuscation 只在
+「這一頁剛好含有 email 字樣」時才動手 —— 所以一個內容由使用者投稿的站,
+它會安靜地躺著,直到某天有人在願望裡打了自己的信箱,**那一則、只有那一則**
+壞掉。而且你回頭看程式碼會完全找不到原因,因為壞的不是你的程式。
+
+我們就是為了這個把 `email_obfuscation` 關掉的(只關這個 zone;隔壁 zone 有
+別人的站在用它擋爬蟲,不能順手一起關)。
+
+至於 Web Analytics:同一個帳號底下,它是**逐 zone** 設定的。我們實測這個帳號
+有兩個 zone 開著 auto-install,而許願池所在的 zone 沒開,頁面上量不到 beacon:
+
+```bash
+curl -s https://你的網域/ | grep -c cloudflareinsights   # 0 才是乾淨的
 ```
-Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/…' violates
-the following Content Security Policy directive: "script-src 'sha256-…'"
-```
 
-擋掉是好事,但這代表「頁面會不會死」被交給了 CDN 的設定。自己驗一次最快:
+所以不要用「我記得我關過」來判斷 —— 要逐 zone 查,而且用抓回來的 HTML 判斷,
+不是看後台開關。自己驗一次最快:
 
 ```bash
 # 線上頁面 inline script 的雜湊,必須跟 CSP 標頭裡宣告的那個一樣
@@ -212,6 +224,65 @@ python3 scripts/selftest.py --verify-gauge  # 把 9 個防護分別改壞,要求
 把逃脫檢查整段拆掉,測試照樣全綠。
 
 一套永遠會綠的測試,比沒有測試更危險。
+
+---
+
+## 八、事後加固:先量再收緊,而且要證明「收緊」真的發生了
+
+站上線之後我們又做了一輪加固。這一輪最有價值的不是改了什麼,是**改之前先量**。
+
+### 想把最低 TLS 版本拉到 1.2,但同一個 zone 上有別人的站
+
+原本兩個 zone 的 `min_tls_version` 都是 **1.0**。拉到 1.2 是標準做法,問題是其中
+一個 zone 底下還有一個公家單位在用的子網域 —— 萬一那邊有老電腦只會 TLS 1.0,
+我一按下去就把人家鎖在門外,而且我不會知道。
+
+所以先查實際流量(Cloudflare GraphQL,免費方案一次只能查一天,要逐日累加):
+
+```
+過去 7 天,153,724 次請求
+  TLSv1.3   99.02%
+  TLSv1.2    0.08%
+  舊版 TLS   0 次
+```
+
+0 次。這時候再按,就不是賭博了。**「應該沒人在用」和「量過確實沒人在用」是兩件事。**
+
+### 收緊之後要反過來證明它真的擋住了
+
+改完設定,API 回讀顯示 `1.2` —— 但那只證明設定值變了,不證明邊緣真的會拒絕。
+我第一次驗證還驗出了假綠燈:
+
+```bash
+openssl s_client -connect 站台:443 -tls1_1     # 顯示「握手成功」
+```
+
+看起來像沒擋住。實際上是**本機的 OpenSSL 3.0 根本不肯發起舊版握手**
+(`no protocols available`),那句「成功」是我的判斷字串抓錯了。降低安全等級
+重發才拿到真正的答案:
+
+```python
+ctx.set_ciphers("ALL:@SECLEVEL=0")
+ctx.maximum_version = ssl.TLSVersion.TLSv1_1
+# -> ssl.SSLError: tlsv1 alert protocol version
+```
+
+`alert protocol version` 是**伺服器送回來的拒絕警示**。這才是證據。
+在此之前,我測到的其實是自己這台機器的限制,不是對方的行為。
+
+### 加標頭要限定範圍,不要波及鄰居
+
+同一個 zone 上有別人的站時,任何 zone 級開關都要當成會誤傷。加安全標頭我們用
+Transform Rule,而且條件同時鎖主機名**與路徑**:
+
+```
+(http.host eq "你的子網域" and starts_with(http.request.uri.path, "/你的路徑/"))
+```
+
+套用後要驗**三個**地方,不是一個:目標路徑有沒有加到、同主機的其他路徑有沒有
+被波及、隔壁子網域有沒有被波及。我們第三項一開始看起來像失敗(鄰居站也回了三個
+安全標頭),查下去才發現那是**他們自己本來就有的**——值不一樣(`SAMEORIGIN` 對
+`DENY`)。分辨方法:比對值,不要只數數量。
 
 ---
 
