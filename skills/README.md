@@ -15,11 +15,15 @@ skills/
 
 ## 怎麼用
 
-把整個資料夾複製到你的 skills 目錄就好,不用安裝、不用註冊:
+**Claude Code 與 Codex 都能用**,而且是同一種結構(`<名字>/SKILL.md`)。
+把整個資料夾複製到對應的 skills 目錄就好,不用安裝、不用註冊:
 
 ```bash
-# 全域(所有專案都能用)
+# Claude Code
 cp -r skills/ai ~/.claude/skills/
+
+# Codex(實測 codex-cli 0.147:~/.codex/skills/<名字>/SKILL.md)
+cp -r skills/ai ~/.codex/skills/
 
 # 或只給單一專案用
 cp -r skills/ai <你的專案>/.claude/skills/

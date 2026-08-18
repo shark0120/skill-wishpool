@@ -203,9 +203,15 @@ p{color:var(--soft)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
 header{padding:1.3rem 0 .6rem;text-align:center}
-.tagline{margin:.4rem auto 0;max-width:34rem}
+/* 斷行只准落在句子之間:每一句包成 .nb 不准內部斷行,
+   而且每句都壓在 16 字以內,320px 也塞得下(硬 nowrap 長句會撐破版面)。
+   text-wrap:balance 再把幾行的長度拉平。 */
+.tagline{margin:.4rem auto 0;max-width:36rem;text-wrap:balance;font-size:.95rem}
+.tagline .nb{white-space:nowrap}
+/* 保命:極窄螢幕上寧可斷得醜,也不要讓 nowrap 的句子把版面撐破。
+   實測 320px 時最寬的一句是 287px、內寬 288px —— 只差 1px,換個字體就爆。 */
+@media (max-width:19rem){.tagline .nb{white-space:normal}}
 .tagline b{color:var(--ink)}
-.tagline b::before,.tagline b::after{content:' '}
 
 /* ══ 圖示 ══════════════════════════════════════════════════════════════
    全部是同文件內嵌 SVG symbol,沒有 emoji、沒有圖檔、沒有字型圖示。
@@ -526,6 +532,16 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
 .gal-links{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:.6rem 0 0}
 .gal-links code{font-size:.82rem;background:var(--bg2);padding:.1rem .35rem;
   border-radius:var(--r)}
+.gal-install{margin:.8rem 0 0;padding:.75rem .85rem;background:var(--bg2);
+  border-radius:var(--r);border-left:2px solid var(--c-flare)}
+.gal-install-label{font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--c-flare);font-weight:700;margin:0}
+.gal-install-body{font-size:.86rem;color:var(--soft);margin:.25rem 0 0}
+.gal-paths{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0 0}
+.gal-path{display:inline-flex;align-items:center;gap:.4rem;background:var(--card);
+  border:var(--hair) solid var(--rule);border-radius:var(--r);padding:.3rem .55rem}
+.gal-path b{font-size:.74rem;letter-spacing:.1em;color:var(--ink)}
+.gal-path code{font-size:.8rem;color:var(--soft)}
 
 /* ══ 有滑鼠才給的手感 ══════════════════════════════════════════════════
    用 hover:hover 隔離 —— 觸控裝置套 hover 會變成「按一下先觸發 hover
@@ -584,8 +600,10 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
   <header>
     <h1>Skill 許願池</h1>
     <div class="hair" aria-hidden="true"></div>
-    <p class="tagline">你想要什麼 AI skill?丟進池子,大家聯署。<b
-      id="rule-line">每三天結算一次,票最高的那一個就做成 skill。</b>不用註冊。</p>
+    <p class="tagline"><span class="nb">你想要什麼 AI skill?</span><span
+      class="nb">丟進池子,大家聯署。</span><b id="rule-line"><span
+      class="nb">每 3 天結算一次,</span><span class="nb">票最高的做成 skill。</span></b><span
+      class="nb">Claude Code 與 Codex 都能用。</span><span class="nb">不用註冊。</span></p>
 
     <div class="pool-wrap"><canvas id="pool" aria-hidden="true"></canvas></div>
 
@@ -649,7 +667,7 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     <p class="thanks-label" id="thanks-h">特別感謝</p>
     <p class="thanks-name">顏世倫</p>
     <p class="thanks-epithet">我的 CODEX 之神</p>
-    <p class="thanks-note">這個站的視覺方向、配色節奏與版面手感,是跟他學的。</p>
+    <p class="thanks-note">配色、節奏與版面手感,是跟他學的。</p>
     <a class="btn thanks-link" href="https://www.facebook.com/yan.shi.lun.933337/"
        target="_blank" rel="noopener noreferrer">到老師的 Facebook<svg class="i"
        aria-hidden="true"><use href="#i-link"/></svg></a>
@@ -682,9 +700,17 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
       <div class="gal-links">
         <a class="btn" href="https://github.com/shark0120/skill-wishpool/blob/main/skills/ai/SKILL.md"
            target="_blank" rel="noopener noreferrer">讀 SKILL.md<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
-        <span class="meta">複製整個資料夾到 <code>~/.claude/skills/</code> 就能用,不用安裝</span>
       </div>
     </article>
+
+    <div class="gal-install">
+      <p class="gal-install-label">兩邊都能用</p>
+      <p class="gal-install-body">把整個資料夾放進去就好,不用安裝、不用註冊。</p>
+      <div class="gal-paths">
+        <span class="gal-path"><b>Claude Code</b><code>~/.claude/skills/</code></span>
+        <span class="gal-path"><b>Codex</b><code>~/.codex/skills/</code></span>
+      </div>
+    </div>
   </section>
 
   <section class="toolbar" aria-label="篩選與排序">
@@ -1239,8 +1265,11 @@ function renderRound() {
   box.hidden = false;
   box.replaceChildren();
 
-  $('rule-line').textContent =
-    '每 ' + r.cycle_days + ' 天結算一次,票最高的那一個就會被做成 skill。';
+  // 重建成兩段不可內部斷行的句子;直接寫 textContent 會把 .nb 結構洗掉,
+  // 斷行就又會亂跑。
+  $('rule-line').replaceChildren(
+    el('span', { class: 'nb', text: '每 ' + r.cycle_days + ' 天結算一次,' }),
+    el('span', { class: 'nb', text: '票最高的做成 skill。' }));
 
   // 靜態快照沒有真的結算時間(ends_at 是 null),那就不要顯示假的倒數。
   const live = r.ends_at != null && r.seconds_left != null;
