@@ -16,7 +16,7 @@
 | 類型 | 路徑 |
 |---|---|
 | 某個專案的 production 相關 | `<你的專案>\.claude\skills\<name>\` |
-| 通用工具（壓縮、時程、工廠） | `C:\Users\User\.claude\skills\<name>\` |
+| 通用工具（壓縮、時程、工廠） | `~\.claude\skills\<name>\` |
 | 戰役暫存索引 | `.claude/ai-campaign/skills-outbox/<name>.md` 一行鏈接 |
 
 ## 檔案最小骨架
