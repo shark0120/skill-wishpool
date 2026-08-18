@@ -90,6 +90,7 @@ python3 scripts/export_static.py        # 產生 public/wishes.json
 | `POST` | `/api/wishes` | `{title, detail?, tags?, author?}`;標題重複會**自動合併並幫你附議** |
 | `POST` | `/api/wishes/{id}/vote` | 附議,回 `{votes, already_voted}` |
 | `GET` | `/api/round` | 本輪倒數、領先者、歷屆結果 |
+| `GET` | `/api/challenge?kind=wish\|vote` | 拿一份工作量證明的挑戰;算完把 `pow` 一起送回來 |
 | `POST` | `/api/admin/wishes/{id}` | `{status?, note?, skill_url?}`,需 `X-Admin-Token` |
 | `DELETE` | `/api/admin/wishes/{id}?confirm=1` | 永久刪除(下架請改用 `status=hidden`) |
 | `POST` | `/api/admin/round/close` | 提前結算這一輪 |
@@ -120,6 +121,9 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 | `WISHPOOL_RATE_VOTE_MAX` / `_WINDOW` | `60` / `3600` | 每個來源每小時可附議幾次 |
 | `WISHPOOL_CYCLE_DAYS` | `3` | 幾天結算一次(也可用 `--cycle-days`) |
 | `WISHPOOL_MIN_VOTES` | `1` | 出線門檻 |
+| `WISHPOOL_POW` | `1` | `0` = 關掉送出前的工作量證明 |
+| `WISHPOOL_POW_BITS_WISH` / `_VOTE` | `16` / `13` | 難度(0 bit 的個數)。每 +1 就是兩倍工作量 |
+| `WISHPOOL_POW_TTL` | `300` | 挑戰有效秒數 |
 | `WISHPOOL_CSP` | `hash` | `hash` 用即時算的 inline 雜湊(最嚴);`unsafe-inline` 是**放在會改寫 HTML 的 CDN 後面時的退路**;`off` 完全不發。填錯的值會退回 `hash`,不會變成沒有 CSP |
 
 ---
@@ -130,6 +134,12 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 
 **做了:**
 
+- **送出前的工作量證明**:許願與附議都要先在瀏覽器算一段雜湊
+  (`sha256(salt:nonce)` 開頭要有 N 個 0 bit,預設許願 16 bits ≈ 6.5 萬次、
+  附議 13 bits ≈ 8 千次)。人類等幾十毫秒到半秒,腳本要洗版就得付出等比例 CPU。
+  挑戰由伺服器用 HMAC 簽章、綁來源雜湊、5 分鐘過期、**同一份只能兌現一次**
+  (防重放),而且難度是伺服器說了算 —— 自己把 `bits` 改小會被擋。
+  不需要金鑰、不載入任何外部腳本、不放 cookie。`WISHPOOL_POW=0` 可關掉。
 - **速率限制**:每個來源每小時 5 個願望 / 60 次附議,存在 SQLite 裡,重啟不會歸零。這是唯一真正擋得住洗版的機制。檢查與寫入在同一個 `BEGIN IMMEDIATE` 交易裡,所以平行請求繞不過去(自我測試會打 20 個並行請求,只能有 5 個成功)。
 - **一人一票**:`(願望, 來源雜湊)` 有唯一鍵,重複附議在資料庫層就被吃掉,不只是前端 disable。
 - **不存原始 IP**:只存 `sha256(鹽 + IP)` 前 32 碼。連 access log 也只寫雜湊前 8 碼。自我測試會直接打開 DB 檔翻每一格,確認裡面找不到 IP 字串。
@@ -147,7 +157,10 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 
 - **沒有帳號系統**。同一個 NAT / 校園網路 / 公司網路底下的人會共用一個雜湊,彼此擠不掉彼此的票,但也就只有一票。想要嚴格一人一票就得加登入,這個專案刻意不做。
 - **前端的蜜罐欄位只是嚇阻**,不是防護。真正的防線是速率限制。
-- **沒有 CAPTCHA、沒有防機器人服務**。真的被鎖定攻擊,請在反向代理層擋。
+- **PoW 不等於「人機驗證」**。它證明的是「有人付了計算成本」,不是「這是人類」。
+  買得起 CPU 的人還是過得去 —— 它讓大量自動化變貴,真正擋量的是速率限制。
+- **沒有 CAPTCHA、沒有第三方防機器人服務**。那些都要載入外部腳本,會同時打破
+  零外部請求、不追蹤、CSP 不開洞三件事。真的被鎖定攻擊,請在反向代理層擋。
 - **管理端只有一個權杖**,沒有多人權限、沒有操作稽核日誌。
 - **沒有 email 通知**。願望有進展要自己回來看。
 - **`--seed` 的範例願望是虛構的**,`author` 都寫「範例」,不是真實使用者。
@@ -157,12 +170,12 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 ## 測試
 
 ```bash
-python3 scripts/selftest.py                 # 97 項端到端檢查(真的起伺服器、真的打 HTTP)
+python3 scripts/selftest.py                 # 117 項端到端檢查(真的起伺服器、真的打 HTTP)
 python3 scripts/selftest.py --verify-gauge  # 反向對照:把防護拆掉,確認測試會紅
 python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實算 WCAG 對比度
 ```
 
-`--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、速率限制的寫入鎖、輪次得標判定**這六個防護改壞,然後要求同一套測試**必須失敗**。
+`--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、速率限制的寫入鎖、工作量證明的雜湊檢查、工作量證明的防重放、輪次得標判定**這八個防護改壞,然後要求同一套測試**必須失敗**。
 一套永遠會綠的測試比沒有測試更危險 —— 這一步就是在防那個。
 
 **測試一定要在你要部署的那台機器上跑一次。** 這個專案就吃過一次:同一份程式碼在
@@ -255,8 +268,8 @@ python3 server.py --seed     # http://127.0.0.1:8787
 - **Anti-abuse**: per-source rate limits in SQLite, one vote per source per wish enforced by
   a DB unique key, duplicate-title merging, input sanitisation, hash-based CSP, fail-closed
   admin endpoints. Raw IPs are never stored — only `sha256(salt + ip)`.
-- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (97 checks).
-  `--verify-gauge` sabotages six guards and requires the suite to go red, so the suite
+- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (117 checks).
+  `--verify-gauge` sabotages eight guards and requires the suite to go red, so the suite
   can't quietly become a rubber stamp. It has already caught a false green (a traversal
   test that never actually sent `..`, because `urllib` normalises the path), two real bugs
   (the rate limiter was check-then-act with no lock, so 20 parallel requests all got

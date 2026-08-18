@@ -71,6 +71,18 @@ STATUSES = ("open", "planned", "granted", "declined", "hidden")
 PUBLIC_STATUSES = ("open", "planned", "granted", "declined")
 SORTS = ("hot", "new", "top")
 
+# ── 工作量證明(擋腳本洗版)─────────────────────────────────────────────
+# 送出前瀏覽器要先找到一個 nonce,讓 sha256(salt:nonce) 開頭有 N 個 0 bit。
+# 人類感覺不到(幾十毫秒到半秒),但要洗版就得付出等比例的 CPU。
+#
+# **這不是「人機驗證」**:它證明的是「有人付了計算成本」,不是「這是人類」。
+# 真正擋量的還是速率限制,PoW 是讓自動化變貴的第二層。誠實寫在 README。
+POW_BITS = {
+    "wish": _env_int("WISHPOOL_POW_BITS_WISH", 16),   # 約 6.5 萬次雜湊,桌機約 1 秒
+    "vote": _env_int("WISHPOOL_POW_BITS_VOTE", 13),   # 約 8 千次,按下去幾乎無感
+}
+POW_TTL = _env_int("WISHPOOL_POW_TTL", 300)           # 挑戰有效秒數
+
 # ── 聯署輪次 ─────────────────────────────────────────────────────────────
 # 每 CYCLE_DAYS 天結算一次:票最高的願望出線,狀態轉成 planned(有人接了),
 # 讓它離開候選池,下一輪換第二名上。票數不歸零,沒選上的願望票會繼續累積。
@@ -105,6 +117,11 @@ CREATE TABLE IF NOT EXISTS events (
   kind    TEXT NOT NULL,
   ts      INTEGER NOT NULL
 );
+-- 用過的挑戰值:同一個 salt 只能兌現一次,否則算一次就能無限重放。
+CREATE TABLE IF NOT EXISTS pow_used (
+  salt TEXT PRIMARY KEY,
+  ts   INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -138,6 +155,7 @@ CFG = {
     "cycle_seconds": CYCLE_DAYS_DEFAULT * 86400,
     "min_votes": MIN_VOTES_DEFAULT,
     "csp_mode": "hash",     # hash | unsafe-inline | off
+    "pow": True,
 }
 
 
@@ -289,6 +307,68 @@ def validate_wish(payload: dict) -> dict:
 
 
 # ── 速率限制 ─────────────────────────────────────────────────────────────
+
+def pow_sig(kind: str, salt: str, expires: int, bits: int, ip_hash: str) -> str:
+    """挑戰的簽章。伺服器不存挑戰,靠這個 HMAC 確認它是自己發的、沒被改過。"""
+    msg = "%s|%s|%d|%d|%s" % (kind, salt, expires, bits, ip_hash)
+    return hmac.new(CFG["salt"], msg.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+
+def make_challenge(kind: str, ip_hash: str) -> dict:
+    bits = POW_BITS[kind]
+    salt = secrets.token_hex(16)
+    expires = int(time.time()) + POW_TTL
+    return {"kind": kind, "salt": salt, "bits": bits, "expires": expires,
+            "sig": pow_sig(kind, salt, expires, bits, ip_hash)}
+
+
+def leading_zero_bits(digest: bytes) -> int:
+    """雜湊開頭有幾個 0 bit。難度就是要求這個數字 >= bits。"""
+    n = 0
+    for byte in digest:
+        if byte == 0:
+            n += 8
+            continue
+        for shift in range(7, -1, -1):
+            if (byte >> shift) & 1:
+                return n
+            n += 1
+        return n
+    return n
+
+
+def verify_pow(conn, payload, kind: str, ip_hash: str) -> None:
+    """驗證工作量證明。任何一項不對就擋下來 —— 預設是拒絕,不是放行。"""
+    if not CFG["pow"]:
+        return
+    if not isinstance(payload, dict):
+        raise Invalid("需要先完成送出前的驗證,請重新整理再試一次。", "pow_required")
+    salt = str(payload.get("salt", ""))
+    nonce = str(payload.get("nonce", ""))
+    sig = str(payload.get("sig", ""))
+    try:
+        expires = int(payload.get("expires", 0))
+        bits = int(payload.get("bits", 0))
+    except (TypeError, ValueError):
+        raise Invalid("驗證資料不正確,請重新整理再試。", "pow_bad")
+    if len(salt) > 64 or len(nonce) > 64 or len(sig) > 64:
+        raise Invalid("驗證資料不正確,請重新整理再試。", "pow_bad")
+    if not hmac.compare_digest(sig, pow_sig(kind, salt, expires, bits, ip_hash)):
+        raise Invalid("驗證資料不正確,請重新整理再試。", "pow_bad")
+    if expires < int(time.time()):
+        raise Invalid("驗證過期了,請再試一次。", "pow_expired")
+    if bits != POW_BITS[kind]:
+        raise Invalid("驗證難度不對,請重新整理再試。", "pow_bad")
+    digest = hashlib.sha256((salt + ":" + nonce).encode("utf-8")).digest()
+    if leading_zero_bits(digest) < bits:
+        raise Invalid("驗證沒通過,請再試一次。", "pow_bad")
+    try:
+        conn.execute("INSERT INTO pow_used(salt, ts) VALUES(?,?)",
+                     (salt, int(time.time())))
+    except sqlite3.IntegrityError:
+        raise Invalid("這個驗證已經用過了,請重新整理再試。", "pow_replay")
+    conn.execute("DELETE FROM pow_used WHERE ts < ?", (int(time.time()) - POW_TTL * 4,))
+
 
 def begin_write(conn) -> None:
     """在做「先查再寫」的檢查之前,先取得寫入鎖。
@@ -631,6 +711,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "SkillWishpool/" + VERSION
     sys_version = ""
     protocol_version = "HTTP/1.1"
+    _last_body = None      # 許願的 body 只能讀一次,留下來給 PoW 驗證用
 
     # ── 基礎 ────────────────────────────────────────────────────────────
     def log_message(self, fmt, *args):  # noqa: A003
@@ -689,6 +770,15 @@ class Handler(BaseHTTPRequestHandler):
             return json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise Invalid("內容不是合法的 JSON。", "bad_body")
+
+    def read_json_optional(self):
+        """沒有 body 就回 None,而不是丟錯 —— 讓後面的驗證去決定該不該擋。"""
+        try:
+            if int(self.headers.get("Content-Length") or 0) <= 0:
+                return None
+        except ValueError:
+            return None
+        return self.read_json()
 
     def guard_write(self):
         if CFG["readonly"]:
@@ -768,6 +858,8 @@ class Handler(BaseHTTPRequestHandler):
                         "tag_max_count": TAG_MAX_COUNT, "tag_max_len": TAG_MAX_LEN,
                         "wishes_per_hour": RATE_WISH_MAX, "votes_per_hour": RATE_VOTE_MAX,
                     },
+                    "pow": ({"wish": POW_BITS["wish"], "vote": POW_BITS["vote"]}
+                            if CFG["pow"] else None),
                 }
             return self.send_json(200, payload)
 
@@ -793,6 +885,15 @@ class Handler(BaseHTTPRequestHandler):
                 }
             return self.send_json(200, payload)
 
+        if path == "/api/challenge" and method == "GET":
+            kind = query.get("kind", ["wish"])[0]
+            if kind not in POW_BITS:
+                raise Invalid("不認識的驗證類型。", "bad_query")
+            if not CFG["pow"]:
+                return self.send_json(200, {"ok": True, "pow": None})
+            return self.send_json(200, {
+                "ok": True, "pow": make_challenge(kind, hash_ip(self.real_ip()))})
+
         if path == "/api/round" and method == "GET":
             with connect() as conn:
                 payload = {"ok": True, "round": round_payload(conn)}
@@ -800,10 +901,13 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/wishes" and method == "POST":
             self.guard_write()
-            fields = validate_wish(self.read_json())
+            self._last_body = self.read_json()
+            fields = validate_wish(self._last_body)
             ip_hash = hash_ip(self.real_ip())
+            body_pow = (self._last_body or {}).get("pow")
             with connect() as conn:
                 begin_write(conn)
+                verify_pow(conn, body_pow, "wish", ip_hash)
                 rate_check(conn, ip_hash, "wish", RATE_WISH_MAX, RATE_WISH_WINDOW)
                 dup = conn.execute("SELECT * FROM wishes WHERE norm_title=?",
                                    (fields["norm_title"],)).fetchone()
@@ -846,12 +950,14 @@ class Handler(BaseHTTPRequestHandler):
             self.guard_write()
             wish_id = int(m.group(1))
             ip_hash = hash_ip(self.real_ip())
+            body_pow = (self.read_json_optional() or {}).get("pow")
             with connect() as conn:
                 begin_write(conn)
                 row = conn.execute("SELECT id,status FROM wishes WHERE id=?",
                                    (wish_id,)).fetchone()
                 if row is None or row["status"] == "hidden":
                     raise Invalid("找不到這個願望。", "not_found")
+                verify_pow(conn, body_pow, "vote", ip_hash)
                 rate_check(conn, ip_hash, "vote", RATE_VOTE_MAX, RATE_VOTE_WINDOW)
                 votes, already = register_vote(conn, wish_id, ip_hash)
                 rate_record(conn, ip_hash, "vote")
@@ -1053,6 +1159,7 @@ def main(argv=None):
     CFG["admin_token"] = os.environ.get("WISHPOOL_ADMIN_TOKEN", "")
     CFG["allow_origin"] = os.environ.get("WISHPOOL_ALLOW_ORIGIN", "")
     CFG["trust_proxy"] = os.environ.get("WISHPOOL_TRUST_PROXY", "") == "1"
+    CFG["pow"] = os.environ.get("WISHPOOL_POW", "1") != "0"
     csp = os.environ.get("WISHPOOL_CSP", "hash")
     CFG["csp_mode"] = csp if csp in ("hash", "unsafe-inline", "off") else "hash"
     CFG["salt"] = load_salt(os.environ.get(

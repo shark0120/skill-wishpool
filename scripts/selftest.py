@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -159,7 +160,7 @@ XSS = '<img src=x onerror="alert(1)">「引號」& <script>alert(2)</script>'
 def suite_core(c, src_root):
     env = {"WISHPOOL_ADMIN_TOKEN": TOKEN,
            "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
-           "WISHPOOL_TRUST_PROXY": 1}
+           "WISHPOOL_TRUST_PROXY": 1, "WISHPOOL_POW": 0}
     with Server(src_root, env, label="core") as srv:
         p = srv.port
 
@@ -393,7 +394,7 @@ def suite_core(c, src_root):
 
 def suite_rate_limit(c, src_root):
     """不覆寫任何速率設定 —— 這一節同時驗「預設值是多少」跟「真的會擋」。"""
-    with Server(src_root, {}, label="rate") as srv:
+    with Server(src_root, {"WISHPOOL_POW": 0}, label="rate") as srv:
         p = srv.port
         _, health, _ = req(p, "GET", "/api/health")
         limits = health.get("limits") or {}
@@ -414,7 +415,7 @@ def suite_rate_limit_race(c, src_root):
     這一節就是在證明那個 check-then-act 的競態關掉了。修之前實測 20 個並行請求
     在上限 5 的池子裡全部拿到 201。
     """
-    with Server(src_root, {}, label="race") as srv:
+    with Server(src_root, {"WISHPOOL_POW": 0}, label="race") as srv:
         p = srv.port
         req(p, "GET", "/api/health")     # 先把 DB 初始化完,不要把建表算進競態
         results = []
@@ -451,7 +452,7 @@ def suite_rounds(c, src_root):
     """
     env = {"WISHPOOL_ADMIN_TOKEN": TOKEN, "WISHPOOL_CYCLE_SECONDS": 6,
            "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
-           "WISHPOOL_TRUST_PROXY": 1}
+           "WISHPOOL_TRUST_PROXY": 1, "WISHPOOL_POW": 0}
     with Server(src_root, env, label="rounds") as srv:
         p = srv.port
         _, data, _ = req(p, "POST", "/api/wishes", {"title": "輪次測試:比較少票的願望"},
@@ -522,7 +523,7 @@ def suite_read_after_write(c, src_root):
     多輪、中間不 sleep,把時間差壓到最小。
     """
     env = {"WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
-           "WISHPOOL_TRUST_PROXY": 1}
+           "WISHPOOL_TRUST_PROXY": 1, "WISHPOOL_POW": 0}
     with Server(src_root, env, label="raw") as srv:
         p = srv.port
         missing_after_create, missing_vote = [], []
@@ -545,6 +546,107 @@ def suite_read_after_write(c, src_root):
 
         _, listing, _ = req(p, "GET", "/api/wishes?limit=200")
         c.eq("10 筆都真的在資料庫裡", listing["total"], 10)
+
+
+def lz_bits(digest: bytes) -> int:
+    n = 0
+    for byte in digest:
+        if byte == 0:
+            n += 8
+            continue
+        for shift in range(7, -1, -1):
+            if (byte >> shift) & 1:
+                return n
+            n += 1
+        return n
+    return n
+
+
+def solve_pow(port, kind, headers=None):
+    """跟伺服器要一個挑戰並解開 —— 跟前端做的是同一件事。"""
+    _, ch, _ = req(port, "GET", "/api/challenge?kind=" + kind, headers=headers)
+    payload = (ch or {}).get("pow")
+    if not payload:
+        return None
+    salt, bits = payload["salt"], payload["bits"]
+    n = 0
+    while True:
+        if lz_bits(hashlib.sha256(("%s:%d" % (salt, n)).encode()).digest()) >= bits:
+            out = dict(payload)
+            out["nonce"] = str(n)
+            return out
+        n += 1
+
+
+def suite_pow(c, src_root):
+    """送出前的工作量證明。
+
+    它擋的是「腳本大量灌」,不是「證明你是人類」—— 但只要它默默失效,
+    這個站就只剩速率限制一層。所以每一種繞過方式都要有一條測試盯著。
+    """
+    with Server(src_root, {}, label="pow-default") as srv:
+        _, health, _ = req(srv.port, "GET", "/api/health")
+        c.eq("預設有開工作量證明", health.get("pow") or {}, {"wish": 16, "vote": 13})
+        status, data, _ = req(srv.port, "POST", "/api/wishes", {"title": "沒帶驗證的許願"})
+        c.eq("沒帶驗證的許願被擋", (status, (data or {}).get("code")), (400, "pow_required"))
+
+    env = {"WISHPOOL_POW_BITS_WISH": 10, "WISHPOOL_POW_BITS_VOTE": 8,
+           "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
+           "WISHPOOL_TRUST_PROXY": 1}
+    with Server(src_root, env, label="pow") as srv:
+        p = srv.port
+        _, ch, _ = req(p, "GET", "/api/challenge?kind=wish")
+        c.ok("挑戰含 salt/bits/expires/sig",
+             all(k in (ch.get("pow") or {}) for k in ("salt", "bits", "expires", "sig")),
+             repr(ch)[:160])
+        c.eq("難度吃環境變數", ch["pow"]["bits"], 10)
+
+        good = solve_pow(p, "wish")
+        status, data, _ = req(p, "POST", "/api/wishes",
+                              {"title": "帶了正確驗證的許願", "pow": good})
+        c.eq("正確的驗證可以通過", status, 201)
+        wish_id = (data.get("wish") or {}).get("id")
+
+        status, data, _ = req(p, "POST", "/api/wishes",
+                              {"title": "重放同一份驗證", "pow": good})
+        c.eq("同一份驗證不能用第二次", (data or {}).get("code"), "pow_replay")
+
+        bad = dict(solve_pow(p, "wish")); bad["nonce"] = "0"
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "亂填 nonce", "pow": bad})
+        c.eq("nonce 不對被擋", (data or {}).get("code"), "pow_bad")
+
+        forged = {"salt": "f" * 32, "bits": 10, "expires": int(time.time()) + 300,
+                  "sig": "0" * 32, "nonce": "1"}
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "偽造簽章", "pow": forged})
+        c.eq("偽造的簽章被擋", (data or {}).get("code"), "pow_bad")
+
+        cheat = dict(solve_pow(p, "wish")); cheat["bits"] = 1
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "自己調難度", "pow": cheat})
+        c.eq("自己調低難度被擋", (data or {}).get("code"), "pow_bad")
+
+        expired = dict(solve_pow(p, "wish")); expired["expires"] = int(time.time()) - 10
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "過期的驗證", "pow": expired})
+        c.ok("過期或被改的驗證被擋",
+             (data or {}).get("code") in ("pow_expired", "pow_bad"), repr(data)[:120])
+
+        _, data, _ = req(p, "POST", "/api/wishes/%d/vote" % wish_id,
+                         headers={"X-Forwarded-For": "203.0.113.90"})
+        c.eq("沒帶驗證的投票被擋", (data or {}).get("code"), "pow_required")
+        vpow = solve_pow(p, "vote", headers={"X-Forwarded-For": "203.0.113.90"})
+        status, data, _ = req(p, "POST", "/api/wishes/%d/vote" % wish_id,
+                              {"pow": vpow}, headers={"X-Forwarded-For": "203.0.113.90"})
+        c.eq("帶了正確驗證的投票可以通過", (status, data.get("votes")), (200, 2))
+
+        other = solve_pow(p, "vote", headers={"X-Forwarded-For": "203.0.113.91"})
+        _, data, _ = req(p, "POST", "/api/wishes/%d/vote" % wish_id,
+                         {"pow": other}, headers={"X-Forwarded-For": "203.0.113.92"})
+        c.eq("別的來源的驗證不能挪用", (data or {}).get("code"), "pow_bad")
+
+    with Server(src_root, {"WISHPOOL_POW": 0}, label="pow-off") as srv:
+        _, health, _ = req(srv.port, "GET", "/api/health")
+        c.eq("關掉時 health 說沒有 pow", health.get("pow"), None)
+        status, _, _ = req(srv.port, "POST", "/api/wishes", {"title": "關掉驗證後的許願"})
+        c.eq("關掉時不帶驗證也能許願", status, 201)
 
 
 def suite_csp_modes(c, src_root):
@@ -633,7 +735,7 @@ def read_db_text(db_path):
 def run_all(src_root):
     c = Checks()
     for suite in (suite_core, suite_rate_limit, suite_rate_limit_race,
-                  suite_read_after_write, suite_rounds, suite_csp_modes,
+                  suite_read_after_write, suite_rounds, suite_pow, suite_csp_modes,
                   suite_readonly, suite_admin_disabled):
         try:
             suite(c, src_root)
@@ -663,6 +765,11 @@ MUTATIONS = [
      "    if used >= limit:", "    if False:"),
     ("拿掉寫入鎖(速率限制的競態就會回來)",
      '    conn.execute("BEGIN IMMEDIATE")', "    pass"),
+    ("拿掉工作量證明的雜湊檢查",
+     "    if leading_zero_bits(digest) < bits:", "    if False:"),
+    ("拿掉工作量證明的防重放",
+     '        conn.execute("INSERT INTO pow_used(salt, ts) VALUES(?,?)",',
+     "        _ = (lambda *a: None)("),
     ("拿掉輪次得標判定",
      "        winner = pick_winner(conn, ends)", "        winner = None"),
 ]

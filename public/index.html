@@ -1171,6 +1171,111 @@ const MOTION = (() => {
            available: !!lib, enabled: on };
 })();
 
+/* ══ 送出前的工作量證明 ═══════════════════════════════════════════════
+   為什麼不用 reCAPTCHA / hCaptcha / Turnstile:那些都要載入外部腳本,會同時
+   打破這個站的三個承諾 —— 零外部請求、不追蹤、CSP 不開洞,而且要金鑰。
+
+   這裡改成自帶的工作量證明:送出前瀏覽器要找到一個 nonce,讓
+   sha256(salt:nonce) 開頭有 N 個 0 bit。人類等幾十毫秒到半秒,
+   但要腳本洗版就得付出等比例的 CPU。
+
+   ⚠️ 誠實說:**這不是「證明你是人類」**,是「證明有人付了計算成本」。
+   真正擋量的還是伺服器端的速率限制,這是讓自動化變貴的第二層。 */
+const POW = (() => {
+  // K 與 H 用執行期算(質數立方根/平方根的小數部分),不手抄 64 個常數 ——
+  // 手抄打錯一個字,雜湊就永遠對不上,而且很難查。
+  const primes = [];
+  for (let n = 2; primes.length < 64; n++) {
+    let isP = true;
+    for (let d = 2; d * d <= n; d++) if (n % d === 0) { isP = false; break; }
+    if (isP) primes.push(n);
+  }
+  const frac = (x) => Math.floor((x - Math.floor(x)) * 4294967296) >>> 0;
+  const K = primes.map((p) => frac(Math.cbrt(p)));
+  const H0 = primes.slice(0, 8).map((p) => frac(Math.sqrt(p)));
+  const rr = (x, n) => (x >>> n) | (x << (32 - n));
+
+  function sha256(bytes) {
+    const len = bytes.length;
+    const withPad = ((len + 9 + 63) >> 6) << 6;
+    const m = new Uint8Array(withPad);
+    m.set(bytes); m[len] = 0x80;
+    const bits = len * 8;
+    new DataView(m.buffer).setUint32(withPad - 4, bits >>> 0);
+    new DataView(m.buffer).setUint32(withPad - 8, Math.floor(bits / 4294967296));
+    const H = H0.slice();
+    const w = new Uint32Array(64);
+    const view = new DataView(m.buffer);
+    for (let off = 0; off < withPad; off += 64) {
+      for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+      for (let i = 16; i < 64; i++) {
+        const a = w[i - 15], b = w[i - 2];
+        const s0 = (rr(a, 7) ^ rr(a, 18) ^ (a >>> 3)) >>> 0;
+        const s1 = (rr(b, 17) ^ rr(b, 19) ^ (b >>> 10)) >>> 0;
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      }
+      let [a, b, c, d, e, f, g, h] = H;
+      for (let i = 0; i < 64; i++) {
+        const S1 = (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) >>> 0;
+        const ch = ((e & f) ^ (~e & g)) >>> 0;
+        const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+        const S0 = (rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) >>> 0;
+        const mj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+        const t2 = (S0 + mj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0;
+        d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      const upd = [a, b, c, d, e, f, g, h];
+      for (let i = 0; i < 8; i++) H[i] = (H[i] + upd[i]) >>> 0;
+    }
+    const out = new Uint8Array(32);
+    const ov = new DataView(out.buffer);
+    for (let i = 0; i < 8; i++) ov.setUint32(i * 4, H[i]);
+    return out;
+  }
+
+  const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
+  // 自我驗證:算錯的話寧可整個關掉,也不要讓使用者一直看到「驗證沒通過」
+  const enc = new TextEncoder();
+  const ok = hex(sha256(enc.encode('abc')))
+    === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+
+  function leadingZeroBits(u8) {
+    let n = 0;
+    for (const byte of u8) {
+      if (byte === 0) { n += 8; continue; }
+      for (let sh = 7; sh >= 0; sh--) { if ((byte >> sh) & 1) return n; n++; }
+      return n;
+    }
+    return n;
+  }
+
+  /* 分批跑並讓出主執行緒,不然畫面會凍住。上限 25 秒,免得難度設太高時
+     使用者盯著一個永遠轉不完的按鈕。 */
+  async function grind(salt, bits) {
+    if (!ok) throw new Error('這個瀏覽器算不出驗證碼');
+    const t0 = Date.now();
+    for (let n = 0; ; ) {
+      for (let i = 0; i < 1500; i++, n++) {
+        if (leadingZeroBits(sha256(enc.encode(salt + ':' + n))) >= bits) return String(n);
+      }
+      if (Date.now() - t0 > 25000) throw new Error('驗證算太久了,請再試一次');
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  async function solve(kind) {
+    let ch;
+    try { ch = await api('api/challenge?kind=' + kind); }
+    catch (e) { return null; }              // 舊版伺服器沒有這支 → 不帶 pow
+    if (!ch || !ch.pow) return null;        // 伺服器把 PoW 關掉了
+    const { salt, bits, expires, sig } = ch.pow;
+    return { salt, bits, expires, sig, nonce: await grind(salt, bits) };
+  }
+
+  return { solve, selfTestPassed: ok };
+})();
+
 /* ══ 狀態 ═══════════════════════════════════════════════════════════════ */
 const state = {
   mode: 'loading',      // 'live' = 有後端可寫;'static' = 唯讀展示
@@ -1550,8 +1655,14 @@ async function doVote(w, btn) {
   if (btn.disabled) return;
   btn.disabled = true;
   MOTION.press(btn);
+  const label = btn.querySelector('.lbl');
+  const labelWas = label.textContent;
   try {
-    const data = await api('api/wishes/' + w.id + '/vote', { method: 'POST' });
+    label.textContent = '驗證';
+    const pow = await POW.solve('vote');
+    label.textContent = labelWas;
+    const data = await api('api/wishes/' + w.id + '/vote',
+      { method: 'POST', body: JSON.stringify({ pow }) });
     w.votes = data.votes;
     btn.querySelector('.n').textContent = String(data.votes);
     btn.querySelector('.lbl').textContent = '已署';
@@ -1566,6 +1677,7 @@ async function doVote(w, btn) {
       refreshRound();       // 領先者可能換人了
     }
   } catch (err) {
+    label.textContent = labelWas;
     toast(err.message, true);
     if (err.code !== 'rate_limited') btn.disabled = false;
     return;
@@ -1595,8 +1707,11 @@ async function submitWish(ev) {
   }
   const btn = $('submit');
   btn.disabled = true;
-  btn.textContent = '丟進去…';
   try {
+    // 先算工作量證明再送。這一段是使用者唯一會感覺到的等待,所以要講清楚在等什麼。
+    btn.textContent = '驗證中…';
+    payload.pow = await POW.solve('wish');
+    btn.textContent = '丟進去…';
     const data = await api('api/wishes', { method: 'POST', body: JSON.stringify(payload) });
     rememberVote(data.wish.id);
     $('compose').reset();
