@@ -653,6 +653,7 @@ STATIC_TYPES = {
     ".ico": "image/x-icon",
     ".txt": "text/plain; charset=utf-8",
     ".webmanifest": "application/manifest+json",
+    ".xml": "application/xml; charset=utf-8",
 }
 
 _INLINE_BLOCK = re.compile(rb"<(script|style)\b[^>]*>(.*?)</\1\s*>", re.S | re.I)
@@ -734,6 +735,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Permissions-Policy",
                          "geolocation=(), camera=(), microphone=(), payment=()")
+        # 讀取一律開放跨來源:願望是公開資料,而且這個站沒有 cookie/session,
+        # 所以「任何網站都能讀」不會洩漏任何人的東西。別人的 AI 助手要從別的
+        # 網域抓內容才不會被 CORS 擋住。
+        # **寫入不在此列** —— 那些要嘛同源,要嘛得自己設 WISHPOOL_ALLOW_ORIGIN。
+        if self.command in ("GET", "HEAD"):
+            self.send_header("Access-Control-Allow-Origin", "*")
         origin = CFG["allow_origin"]
         if origin:
             self.send_header("Access-Control-Allow-Origin", origin)

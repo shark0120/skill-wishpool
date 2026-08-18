@@ -279,6 +279,19 @@ def suite_core(c, src_root):
         status, _, _ = req(p, "GET", "/api/nope")
         c.eq("不存在的 API 回 404", status, 404)
 
+        # 讀取要能被別的網站(別人的 AI 助手)抓,寫入不能 ——
+        # 願望是公開資料而且沒有 cookie,所以開放讀取不會洩漏任何人的東西;
+        # 但寫入若也開放跨來源,任何網站都能借訪客的手送出願望。
+        _, _, headers = req(p, "GET", "/api/wishes")
+        c.eq("讀取開放跨來源", headers.get("Access-Control-Allow-Origin"), "*")
+        _, _, headers = req(p, "GET", "/robots.txt")
+        c.eq("robots.txt 讀得到", headers.get("Access-Control-Allow-Origin"), "*")
+        _, _, headers = req(p, "POST", "/api/wishes", {"title": "跨來源寫入測試願望"})
+        c.eq("寫入不開放跨來源", headers.get("Access-Control-Allow-Origin"), None)
+        status, body = raw_get(p, "/robots.txt")
+        c.ok("robots.txt 允許抓取", status == 200 and b"Allow: /" in body,
+             "status=%s" % status)
+
         # 靜態檔:目錄逃脫與 CSP
         # 目標刻意選 data/seed.json —— 副檔名是白名單裡的 .json,所以只有
         # realpath 逃脫檢查擋得住它。拿 server.py 當目標會被副檔名白名單擋掉,

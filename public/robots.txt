@@ -1,0 +1,13 @@
+# Skill 許願池 —— 歡迎抓取,包括 AI 助手與研究用途。
+# 願望內容是公開資料;API 也開放跨來源讀取(GET 有 Access-Control-Allow-Origin: *)。
+User-agent: *
+Allow: /
+
+# 讀取用的 API(不需要金鑰、不需要驗證):
+#   GET /api/wishes?sort=hot|new|top&q=&tag=&limit=&offset=
+#   GET /api/wishes/{id}
+#   GET /api/round
+#   GET /api/health
+# 送出願望與附議需要先做工作量證明(GET /api/challenge),讀取不需要。
+
+Sitemap: https://skill-tw.com/sitemap.xml
