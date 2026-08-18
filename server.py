@@ -32,6 +32,7 @@ import re
 import secrets
 import sqlite3
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -81,7 +82,34 @@ POW_BITS = {
     "wish": _env_int("WISHPOOL_POW_BITS_WISH", 16),   # 約 6.5 萬次雜湊,桌機約 1 秒
     "vote": _env_int("WISHPOOL_POW_BITS_VOTE", 13),   # 約 8 千次,按下去幾乎無感
 }
-POW_TTL = _env_int("WISHPOOL_POW_TTL", 300)           # 挑戰有效秒數
+# 180 秒而不是 300:挑戰可以先領後用,時間窗越長,攻擊者能先囤越多份算好的證明。
+# 解一份大約 1-3 秒,180 秒對正常使用者非常寬鬆。
+POW_TTL = _env_int("WISHPOOL_POW_TTL", 180)           # 挑戰有效秒數
+
+# ── 讀取與挑戰的限流(記憶體內)─────────────────────────────────────────
+# 寫入的限流存在 SQLite(重啟不能歸零,那是防洗版的底線);讀取的限流放記憶體:
+# 它擋的是「短時間內狂打」,重啟歸零沒關係,而且不會讓 events 表被讀取請求灌爆。
+RATE_READ_MAX = _env_int("WISHPOOL_RATE_READ_MAX", 240)        # 每分鐘 API 讀取
+RATE_CHALLENGE_MAX = _env_int("WISHPOOL_RATE_CHALLENGE_MAX", 40)  # 每分鐘領挑戰
+_MEM_HITS = {}
+_MEM_LOCK = threading.Lock()
+
+
+def mem_limit(key: str, limit: int, window: int = 60) -> None:
+    """記憶體滑動視窗限流。超過就丟 429。"""
+    now = time.time()
+    with _MEM_LOCK:
+        if len(_MEM_HITS) > 50000:      # 防止被大量不同來源灌爆記憶體
+            for k, v in list(_MEM_HITS.items()):
+                if now - v[0] > window:
+                    _MEM_HITS.pop(k, None)
+        slot = _MEM_HITS.get(key)
+        if slot is None or now - slot[0] > window:
+            _MEM_HITS[key] = [now, 1]
+            return
+        slot[1] += 1
+        if slot[1] > limit:
+            raise Invalid("太快了,慢一點再試。", "rate_limited")
 
 # ── 聯署輪次 ─────────────────────────────────────────────────────────────
 # 每 CYCLE_DAYS 天結算一次:票最高的願望出線,狀態轉成 planned(有人接了),
@@ -754,12 +782,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if getattr(self, "_retry_after", None):
+            self.send_header("Retry-After", str(self._retry_after))
         self.base_headers()
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
 
     def send_err(self, status: int, message: str, code: str = "error", field: str = ""):
+        self._retry_after = 60 if code == "rate_limited" else None
         self.send_json(status, {"ok": False, "error": message, "code": code,
                                 "field": field})
 
@@ -843,6 +874,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_err(500, "伺服器出錯了,已記錄。", "server_error")
 
     def api(self, path, query):
+        # 讀取限流:Cloudflare 的 Browser Integrity Check 關掉之後,這裡就是唯一
+        # 擋狂打的地方。給得很寬(每分鐘 240 次),正常瀏覽一次頁面只用 3 次。
+        if self.command in ("GET", "HEAD"):
+            mem_limit("rd:" + hash_ip(self.real_ip()), RATE_READ_MAX)
+
         """⚠️ 所有 handler 都遵守一條規則:**先讓交易提交,才送出回應。**
 
         `with connect() as conn:` 是在離開區塊時才 commit。如果在區塊**裡面**就把
@@ -898,8 +934,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise Invalid("不認識的驗證類型。", "bad_query")
             if not CFG["pow"]:
                 return self.send_json(200, {"ok": True, "pow": None})
+            ip_hash = hash_ip(self.real_ip())
+            # 挑戰可以先領後用,所以領取本身要限流 —— 不然可以先囤一堆算好的證明再爆發。
+            mem_limit("ch:" + ip_hash, RATE_CHALLENGE_MAX)
             return self.send_json(200, {
-                "ok": True, "pow": make_challenge(kind, hash_ip(self.real_ip()))})
+                "ok": True, "pow": make_challenge(kind, ip_hash)})
 
         if path == "/api/round" and method == "GET":
             with connect() as conn:

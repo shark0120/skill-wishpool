@@ -662,6 +662,46 @@ def suite_pow(c, src_root):
         c.eq("關掉時不帶驗證也能許願", status, 201)
 
 
+def suite_read_limits(c, src_root):
+    """讀取與挑戰的限流。
+
+    Cloudflare 的 Browser Integrity Check 關掉之後(為了讓 AI 抓得到內容),
+    這裡就是唯一擋狂打的地方,所以要有測試盯著它真的會擋、而且擋得不會太早。
+    """
+    with Server(src_root, {"WISHPOOL_RATE_READ_MAX": 12,
+                           "WISHPOOL_RATE_CHALLENGE_MAX": 5,
+                           "WISHPOOL_TRUST_PROXY": 1}, label="readlimit") as srv:
+        p = srv.port
+        ip = {"X-Forwarded-For": "198.18.0.1"}
+        codes = [req(p, "GET", "/api/wishes", headers=ip)[0] for _ in range(16)]
+        c.eq("前 12 次讀取都通", codes[:12], [200] * 12)
+        c.ok("超過之後回 429", all(x == 429 for x in codes[12:]), repr(codes))
+        _, data, headers = req(p, "GET", "/api/wishes", headers=ip)
+        c.eq("429 有帶 Retry-After", headers.get("Retry-After"), "60")
+        c.eq("429 的錯誤碼", (data or {}).get("code"), "rate_limited")
+
+        # 另一個來源不受影響 —— 限流是「每來源」,不是全站
+        c.eq("別的來源不受影響",
+             req(p, "GET", "/api/wishes", headers={"X-Forwarded-For": "198.18.0.2"})[0], 200)
+
+        # 靜態頁不受 API 讀取限流影響(不然被限流的人連頁面都打不開)
+        status, _ = raw_get(p, "/robots.txt")
+        c.eq("靜態檔不受 API 限流影響", status, 200)
+
+        # 挑戰要另外限流:它可以先領後用,不限的話能先囤一堆算好的證明
+        ip2 = {"X-Forwarded-For": "198.18.0.3"}
+        ch = [req(p, "GET", "/api/challenge?kind=wish", headers=ip2)[0] for _ in range(8)]
+        c.eq("前 5 次領挑戰都通", ch[:5], [200] * 5)
+        c.ok("領太多挑戰會被擋", 429 in ch[5:], repr(ch))
+
+    with Server(src_root, {}, label="ttl") as srv:
+        _, health, _ = req(srv.port, "GET", "/api/health")
+        c.eq("預設難度", health.get("pow") or {}, {"wish": 16, "vote": 13})
+        _, ch, _ = req(srv.port, "GET", "/api/challenge?kind=wish")
+        ttl = ch["pow"]["expires"] - int(time.time())
+        c.ok("挑戰有效期約 180 秒", 170 <= ttl <= 181, "%d 秒" % ttl)
+
+
 def suite_csp_modes(c, src_root):
     """CSP 的三種模式。
 
@@ -748,7 +788,8 @@ def read_db_text(db_path):
 def run_all(src_root):
     c = Checks()
     for suite in (suite_core, suite_rate_limit, suite_rate_limit_race,
-                  suite_read_after_write, suite_rounds, suite_pow, suite_csp_modes,
+                  suite_read_after_write, suite_rounds, suite_pow, suite_read_limits,
+                  suite_csp_modes,
                   suite_readonly, suite_admin_disabled):
         try:
             suite(c, src_root)
@@ -783,6 +824,9 @@ MUTATIONS = [
     ("拿掉工作量證明的防重放",
      '        conn.execute("INSERT INTO pow_used(salt, ts) VALUES(?,?)",',
      "        _ = (lambda *a: None)("),
+    ("拿掉讀取限流",
+     '            mem_limit("rd:" + hash_ip(self.real_ip()), RATE_READ_MAX)',
+     "            pass"),
     ("拿掉輪次得標判定",
      "        winner = pick_winner(conn, ends)", "        winner = None"),
 ]
