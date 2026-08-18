@@ -148,12 +148,25 @@ body::after{
      ≥80rem 主欄再拆成兩欄願望卡
    字級用 root 的 clamp 一起流動,所有 rem 尺寸自動跟著長大,
    但下限鎖在 16px —— 再小 iOS 聚焦輸入框時會自己放大整頁。            */
+/* 手機:shell 是一根 flex 直欄,rail 用 display:contents 把自己的框拆掉,
+   讓它的小孩直接變成 shell 的 flex 項目 —— 這樣才能用 order 把致謝卡排到最後,
+   同時桌機又能把它們收在同一根欄裡。DOM 只有一份,兩種版面共用。 */
+.shell{display:flex;flex-direction:column}
+.rail{display:contents}
+.main{order:5}
+.rail .thanks{order:9}
+
 @media (min-width:60rem){
   .wrap{max-width:74rem}
-  .shell{display:grid;grid-template-columns:23rem minmax(0,1fr);gap:1.8rem;
+  .shell{display:grid;grid-template-columns:23rem minmax(0,1fr);gap:0 1.8rem;
          align-items:start}
-  .rail{position:sticky;top:1.1rem;display:flex;flex-direction:column;gap:0}
+  /* 桌機:rail 變回一個實體的欄,而且釘住 —— 捲動時聯署框跟著走,
+     底下再接致謝卡,左欄就不會下面一大塊空的。 */
+  .rail{display:flex;flex-direction:column;gap:0;position:sticky;top:1.1rem;
+        grid-column:1;grid-row:1}
+  .main{grid-column:2;grid-row:1;order:0}
   .rail .round{margin-top:0}
+  .rail .thanks{order:0;margin-top:1.1rem}
   .toolbar{margin-top:0}
   header{padding:2.4rem 0 1.2rem}
   #pool{height:clamp(110px,11vw,160px)}
@@ -384,7 +397,7 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 
 /* ══ 致謝 ══════════════════════════════════════════════════════════════
    只是一個外連,不是嵌入式外掛 —— 頁面仍然零外部請求(不會去 FB 拿任何東西)。*/
-.thanks{margin:2rem 0 0;padding:1.4rem 1.2rem;text-align:center;position:relative;
+.thanks{margin:1.1rem 0 0;padding:1.3rem 1.1rem;text-align:center;position:relative;
   border:1.5px solid transparent;border-radius:2rem .6rem 2rem .6rem;
   background:linear-gradient(var(--card),var(--card)) padding-box,
              linear-gradient(115deg,var(--c-flare),var(--c-aurora) 55%,var(--accent)) border-box;
@@ -396,7 +409,10 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
   color:var(--c-flare);font-weight:700;margin:0}
 .thanks-name{font-family:var(--font-display);font-size:clamp(1.45rem,4.4vw,2rem);
   font-weight:600;letter-spacing:.1em;color:var(--ink);margin:.45rem 0 0;line-height:1.3}
-.thanks-note{font-size:.9rem;color:var(--soft);margin:.4rem auto 0;max-width:26rem}
+.thanks-epithet{font-size:.78rem;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--c-flare);font-weight:700;margin:.35rem 0 0}
+.thanks-note{font-size:.88rem;color:var(--soft);margin:.5rem auto 0;max-width:24rem;
+  line-height:1.7}
 .thanks-link{margin:.9rem auto 0;border-radius:1.4rem .4rem 1.4rem .4rem;
   border-color:var(--rule);font-weight:600}
 .thanks-link:hover{border-color:var(--c-flare);color:var(--c-flare)}
@@ -490,6 +506,24 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
 .stat b{font-family:var(--font-display);font-weight:600;font-size:1.5rem;letter-spacing:.02em}
 .round-idx{color:var(--c-flare)}
 .clock{font-family:var(--font-display);letter-spacing:.04em}
+
+/* ══ 成品展示 ══════════════════════════════════════════════════════════ */
+.gallery{border:var(--hair) solid var(--rule);border-radius:var(--r);background:var(--card);
+  padding:.9rem 1rem 1rem;margin:0 0 1rem;position:relative;overflow:hidden}
+.gallery::before{content:'';position:absolute;inset:0 0 auto 0;height:2px;
+  background:linear-gradient(90deg,var(--gold-1),var(--accent) 55%,var(--gold-2))}
+.gallery-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.gallery-label{font-size:.74rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--c-flare);font-weight:700;margin:0}
+.gallery-all{margin-left:auto;font-size:.84rem;font-weight:600;display:inline-flex;
+  align-items:center;gap:.3rem;min-height:44px;text-decoration:none}
+.gal-item{margin:.5rem 0 0;padding:.7rem 0 0;border-top:var(--hair) solid var(--rule)}
+.gal-name{font-family:var(--font-display);font-size:1.3rem;font-weight:600;
+  letter-spacing:.04em;margin:0;color:var(--ink)}
+.gal-desc{font-size:.9rem;color:var(--soft);margin:.3rem 0 0;line-height:1.7}
+.gal-links{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:.6rem 0 0}
+.gal-links code{font-size:.82rem;background:var(--bg2);padding:.1rem .35rem;
+  border-radius:var(--r)}
 
 /* ══ 有滑鼠才給的手感 ══════════════════════════════════════════════════
    用 hover:hover 隔離 —— 觸控裝置套 hover 會變成「按一下先觸發 hover
@@ -608,9 +642,40 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     </div>
     <strong class="err" id="e-form"></strong>
   </form>
+
+  <section class="thanks" aria-labelledby="thanks-h">
+    <p class="thanks-label" id="thanks-h">特別感謝</p>
+    <p class="thanks-name">顏世倫</p>
+    <p class="thanks-epithet">我的 CODEX 之神</p>
+    <p class="thanks-note">Codex 玩得比誰都好。這個站的視覺方向、配色節奏與版面手感,
+      是跟他學的。</p>
+    <a class="btn thanks-link" href="https://www.facebook.com/yan.shi.lun.933337/"
+       target="_blank" rel="noopener noreferrer">到老師的 Facebook<svg class="i"
+       aria-hidden="true"><use href="#i-link"/></svg></a>
+  </section>
   </div><!-- /rail -->
 
   <div class="main">
+
+  <!-- 成品展示:願望做出來之後長什麼樣、放在哪。這是這個池子的交付證明。 -->
+  <section class="gallery" aria-labelledby="gal-h">
+    <div class="gallery-head">
+      <p class="gallery-label" id="gal-h">成品長這樣</p>
+      <a class="gallery-all" href="https://github.com/shark0120/skill-wishpool/tree/main/skills"
+         target="_blank" rel="noopener noreferrer">全部成品<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
+    </div>
+    <article class="gal-item">
+      <h3 class="gal-name">/ai</h3>
+      <p class="gal-desc">給它一個小時數,它排出時程與任務密度、平行偵查、大量產出,
+        每幾輪把進度壓縮寫進持久狀態 —— 換一個對話還能接著跑。</p>
+      <div class="gal-links">
+        <a class="btn" href="https://github.com/shark0120/skill-wishpool/blob/main/skills/ai/SKILL.md"
+           target="_blank" rel="noopener noreferrer">讀 SKILL.md<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
+        <span class="meta">複製整個資料夾到 <code>~/.claude/skills/</code> 就能用,不用安裝</span>
+      </div>
+    </article>
+  </section>
+
   <section class="toolbar" aria-label="篩選與排序">
     <div class="search">
       <span class="mag" aria-hidden="true">
@@ -636,16 +701,6 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
   <button id="load-more" type="button" hidden>載入更多</button>
   </div><!-- /main -->
   </div><!-- /shell -->
-
-  <section class="thanks" aria-labelledby="thanks-h">
-    <p class="thanks-label" id="thanks-h">特別感謝</p>
-    <p class="thanks-name">我的 CODEX 之神</p>
-    <p class="thanks-note">Codex 玩得比誰都好。這個站的視覺方向、配色節奏與版面手感,
-      是跟他學的。</p>
-    <a class="btn thanks-link" href="https://www.facebook.com/yan.shi.lun.933337/"
-       target="_blank" rel="noopener noreferrer">到老師的 Facebook<svg class="i"
-       aria-hidden="true"><use href="#i-link"/></svg></a>
-  </section>
 
   <footer>
     <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>・MIT・可以自己架一個。不放 cookie、不追蹤,資料庫不存你的 IP,只存加鹽雜湊用來認一人一票。</p>
