@@ -1,4 +1,12 @@
-# 資料與祕密:絕對不要進版控
+# 資料與祕密:絕對不要進版控。
+# **不綁目錄** —— --db / WISHPOOL_DB 可以把資料庫開在任何地方(rate limit 與
+# 一人一票的來源雜湊、還有同層自動生成的 ip_salt 都在裡面),只擋 data/ 底下
+# 等於在別的路徑跑一次就漏了。
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+ip_salt
 data/*.db
 data/*.db-wal
 data/*.db-shm

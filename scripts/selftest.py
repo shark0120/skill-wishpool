@@ -58,15 +58,15 @@ def parse(payload: bytes):
         return payload
 
 
-def raw_get(port, path):
+def raw_get(port, path, host="127.0.0.1"):
     """繞過 urllib 的路徑正規化,直接把原始請求行丟進 socket。
 
     urllib 會先幫你把 `/../x` 收成 `/x`,所以用它測目錄逃脫等於沒測 ——
     這個假綠燈是 --verify-gauge 抓出來的:把逃脫檢查整段拆掉,測試照樣全綠。
     """
     with socket.create_connection(("127.0.0.1", port), timeout=10) as sock:
-        sock.sendall(("GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                      "Connection: close\r\n\r\n" % path).encode("utf-8"))
+        sock.sendall(("GET %s HTTP/1.1\r\nHost: %s\r\n"
+                      "Connection: close\r\n\r\n" % (path, host)).encode("utf-8"))
         chunks = []
         while True:
             block = sock.recv(65536)
@@ -359,6 +359,21 @@ def suite_core(c, src_root):
              "prefers-reduced-motion:reduce" in app.replace(" ", ""),
              "找不到 reduced-motion 區塊")
 
+        # 反向對照的錨點必須唯一 —— 這條放在**快測**裡而不是只靠 --verify-gauge,
+        # 因為那支要跑十幾分鐘。實際踩過:為 /w/{id} 與 /sitemap.xml 各加了一行
+        # 一模一樣的限流呼叫,錨點從 1 次變 3 次,那條量尺整支靜靜地失效
+        # (--verify-gauge 會 exit 1,但快測全綠,很容易就推上去了)。
+        #
+        # ⚠️ 只在**真正的原始碼樹**上檢查。--verify-gauge 跑的是改壞過的副本,
+        # 那裡錨點本來就不見了 —— 在那邊也檢查的話,每一個變異都會多紅一項,
+        # 於是「這個變異有沒有被抓到」就永遠是 true,整把尺變成橡皮圖章。
+        if os.path.abspath(src_root) == os.path.abspath(ROOT):
+            with open(os.path.join(src_root, "server.py"), "r", encoding="utf-8") as fh:
+                server_src = fh.read()
+            dup = [(label, server_src.count(a)) for label, a, _ in MUTATIONS
+                   if server_src.count(a) != 1]
+            c.ok("反向對照的每個錨點在 server.py 都剛好出現一次", not dup, repr(dup))
+
         # 管理端
         status, _, _ = req(p, "POST", "/api/admin/wishes/%d" % wish_id, {"status": "granted"})
         c.eq("沒帶權杖回 401", status, 401)
@@ -405,6 +420,151 @@ def suite_core(c, src_root):
              "在 DB 裡找到原始 IP 字串")
 
 
+def suite_share(c, src_root):
+    """/w/{id}:一則願望自己的網址。
+
+    這是整個站唯一的成長路徑(有人把某一則貼給別人),所以它壞掉不會有人回報 ——
+    只會沒有人來。三件事必須成立:換得對(標題與 og: 是那一則)、指得對(網址是
+    這台自己的來源)、跳脫得掉(標題會進 <title> 與 og: 屬性,那是注入點)。
+    """
+    env = {"WISHPOOL_ADMIN_TOKEN": TOKEN, "WISHPOOL_POW": 0,
+           "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500}
+    with Server(src_root, env, label="share") as srv:
+        p = srv.port
+        _, data, _ = req(p, "POST", "/api/wishes",
+                         {"title": "分享測試:自動整理發票", "detail": "說明這一段會進 og:description。"})
+        wid = (data.get("wish") or {}).get("id")
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "危險標題 " + XSS})
+        xid = (data.get("wish") or {}).get("id")
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "這一則等一下會被下架"})
+        hid = (data.get("wish") or {}).get("id")
+
+        status, body, headers = req(p, "GET", "/w/%d" % wid)
+        text = as_text(body)
+        c.eq("/w/{id} 回 200", status, 200)
+        c.ok("<title> 換成那一則願望",
+             "<title>分享測試:自動整理發票 — Skill 許願池</title>" in text, text[:400])
+        c.ok("og:title 換成那一則願望",
+             'content="願望:分享測試:自動整理發票"' in text)
+        c.ok("og:description 用那一則的說明",
+             "說明這一段會進 og:description。" in text)
+        c.ok("og:url 指向這一則",
+             'property="og:url" content="http://127.0.0.1:%d/w/%d"' % (p, wid) in text)
+        c.ok("canonical 也指向這一則",
+             'rel="canonical" href="http://127.0.0.1:%d/w/%d"' % (p, wid) in text)
+        c.ok("og:image 指向這台自己的 og.png",
+             'content="http://127.0.0.1:%d/og.png"' % p in text)
+        c.ok("願望頁照樣是完整的池子", 'id="list"' in text and 'id="compose"' in text)
+        c.ok("願望頁一樣有雜湊 CSP",
+             "sha256-" in headers.get("Content-Security-Policy", "")
+             and "'unsafe-inline'" not in headers.get("Content-Security-Policy", ""),
+             headers.get("Content-Security-Policy", "")[:160])
+
+        # ── 注入:使用者的標題會被放進 <title> 與 og: 的屬性值 ──────────
+        status, body, _ = req(p, "GET", "/w/%d" % xid)
+        head = as_text(body).split("</head>")[0]
+        c.eq("帶 XSS 的願望頁回 200", status, 200)
+        c.ok("標題裡的標籤被跳脫掉",
+             "<script" not in head and "<img" not in head,
+             "head 裡出現沒跳脫的標籤")
+        c.ok("屬性值裡的引號被跳脫掉", 'onerror="' not in head)
+        c.ok("是跳脫不是刪掉(內容還在)", "&lt;script&gt;" in head, head[-600:])
+
+        # ── 找不到 / 已下架:404,但人看到的還是池子 ────────────────────
+        status, body, _ = req(p, "GET", "/w/999999")
+        c.eq("不存在的願望回 404", status, 404)
+        c.ok("404 也照樣送出整個池子(不是空白錯誤頁)", 'id="list"' in as_text(body))
+        c.ok("404 的分享卡退回預設值", "<title>Skill 許願池</title>" in as_text(body))
+        req(p, "POST", "/api/admin/wishes/%d" % hid, {"status": "hidden"},
+            headers={"X-Admin-Token": TOKEN})
+        status, _, _ = req(p, "GET", "/w/%d" % hid)
+        c.eq("下架的願望不給分享頁", status, 404)
+
+        # ── sitemap:願望有網址就該讓人搜得到 ──────────────────────────
+        status, body, _ = req(p, "GET", "/sitemap.xml")
+        sitemap = as_text(body)
+        c.eq("sitemap 回 200", status, 200)
+        c.ok("sitemap 收錄願望頁", "/w/%d</loc>" % wid in sitemap, sitemap[:300])
+        c.ok("sitemap 不收下架的", "/w/%d</loc>" % hid not in sitemap)
+        c.ok("sitemap 用這台自己的來源", "http://127.0.0.1:%d/</loc>" % p in sitemap)
+
+        # ── 對外網址:跟著 Host 走,而且 Host 是用戶端送的,不能直接吐回去 ──
+        status, body, _ = req(p, "GET", "/", headers={"Host": "wish.example.com"})
+        text = as_text(body)
+        c.ok("首頁的分享網址跟著 Host 走",
+             'property="og:url" content="http://wish.example.com/"' in text, text[:400])
+        status, body = raw_get(p, "/", host='evil.test" onload="alert(1)')
+        head = as_text(body).split("</head>")[0]
+        c.ok("Host 帶奇怪字元時退回預設網址,不吐回頁面",
+             "evil.test" not in head and "https://skill-tw.com/" in head,
+             head[:400])
+
+    # 釘死對外網址:代理沒把 Host 傳過來、或要強制 https 的時候用這個。
+    with Server(src_root, {"WISHPOOL_SITE_URL": "https://wish.example.com",
+                           "WISHPOOL_POW": 0}, label="site-url") as srv:
+        status, body, _ = req(srv.port, "GET", "/")
+        text = as_text(body)
+        c.ok("WISHPOOL_SITE_URL 蓋過 Host",
+             'property="og:url" content="https://wish.example.com/"' in text
+             and 'content="https://wish.example.com/og.png"' in text, text[:400])
+        status, body, _ = req(srv.port, "GET", "/sitemap.xml")
+        c.ok("sitemap 也用釘死的網址",
+             "https://wish.example.com/</loc>" in as_text(body))
+
+    # ── 兩份產物不准脫節 ──────────────────────────────────────────────
+    # 靜態託管看到的是 public/index.html 裡那段預設值,伺服器看到的是 meta_block()。
+    # 這兩份必須一致,否則貼到 LINE 的分享卡會跟著託管方式變。
+    for label, script, args in (
+            ("分享卡預設值跟 server.py 一致", "sync_meta.py", ["--check"]),
+            ("分享卡圖 public/og.png 在、尺寸對", "make_og.py", ["--check"])):
+        proc = subprocess.run([PY, os.path.join(src_root, "scripts", script)] + args,
+                              capture_output=True, text=True, encoding="utf-8",
+                              errors="replace")
+        c.ok(label, proc.returncode == 0, (proc.stdout + proc.stderr).strip()[:300])
+
+
+def suite_ipv6_source(c, src_root):
+    """IPv6 的來源要收斂到 /64,不然速率限制與一人一票對 IPv6 使用者形同不存在。
+
+    ISP 與 VPS 配 IPv6 是一次給一整段 /64:同一個人換一個位址就是「另一個來源」,
+    而且完全不用偽造任何標頭。這一節就是盯著那件事。
+    """
+    # 許願上限刻意壓到 5:下面要證明「換位址繞不過去」,上限太高就量不到。
+    env = {"WISHPOOL_TRUST_PROXY": 1, "WISHPOOL_POW": 0,
+           "WISHPOOL_RATE_WISH_MAX": 5, "WISHPOOL_RATE_VOTE_MAX": 200}
+    with Server(src_root, env, label="ipv6") as srv:
+        p = srv.port
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "IPv6 來源收斂測試願望"},
+                         headers={"X-Forwarded-For": "203.0.113.7"})
+        wid = (data.get("wish") or {}).get("id")
+        c.ok("測試用願望建立成功", bool(wid), repr(data)[:200])
+
+        _, v1, _ = req(p, "POST", "/api/wishes/%d/vote" % wid, {},
+                       headers={"X-Forwarded-For": "2001:db8:aaaa:1::1"})
+        c.eq("IPv6 使用者投得了第一票", v1.get("already_voted"), False)
+        _, v2, _ = req(p, "POST", "/api/wishes/%d/vote" % wid, {},
+                       headers={"X-Forwarded-For": "2001:db8:aaaa:1:dead:beef:1:2"})
+        c.eq("同一段 /64 換位址算同一個人", v2.get("already_voted"), True)
+        c.eq("所以票數沒有跟著長", v2.get("votes"), v1.get("votes"))
+
+        _, v3, _ = req(p, "POST", "/api/wishes/%d/vote" % wid, {},
+                       headers={"X-Forwarded-For": "2001:db8:aaaa:2::1"})
+        c.eq("另一段 /64 才算另一個人", v3.get("votes"), (v1.get("votes") or 0) + 1)
+
+        _, v4, _ = req(p, "POST", "/api/wishes/%d/vote" % wid, {},
+                       headers={"X-Forwarded-For": "::ffff:203.0.113.7"})
+        c.eq("IPv4-mapped 跟同一個 IPv4 是同一個人", v4.get("already_voted"), True)
+
+        # 速率限制也要跟著收斂:同一段 /64 一直換位址,不能一直許願。
+        made = 0
+        for i in range(8):
+            status, _, _ = req(p, "POST", "/api/wishes",
+                               {"title": "同一段 /64 的洗版測試 %d 號願望" % i},
+                               headers={"X-Forwarded-For": "2001:db8:bbbb:1::%d" % (i + 1)})
+            if status == 201:
+                made += 1
+        c.ok("同一段 /64 換位址繞不過每小時上限", made <= 5, "成功了 %d 次" % made)
+
 def suite_rate_limit(c, src_root):
     """不覆寫任何速率設定 —— 這一節同時驗「預設值是多少」跟「真的會擋」。"""
     with Server(src_root, {"WISHPOOL_POW": 0}, label="rate") as srv:
@@ -427,33 +587,75 @@ def suite_rate_limit_race(c, src_root):
 
     這一節就是在證明那個 check-then-act 的競態關掉了。修之前實測 20 個並行請求
     在上限 5 的池子裡全部拿到 201。
+
+    量競態的東西自己最容易變成假綠燈,所以做了兩件事:
+    1. **真的同時**:20 條連線先建好、卡在 barrier,再一起把請求送出去。
+       舊版是 20 個 thread 各自 urllib 送 —— t.start() 本身就要時間,第一個常常
+       整趟跑完了第 20 個才起步。
+    2. **打 6 輪**:就算同時了,那個窗口還是很窄,單一輪抓不抓得到有運氣成分
+       (實測拆掉鎖之後,單輪只有大約三分之二會紅)。6 輪每一輪都必須剛好 5 個
+       成功,漏掉的機率降到千分之一以下。每一輪換一個來源位址,配額才會重來。
     """
-    with Server(src_root, {"WISHPOOL_POW": 0}, label="race") as srv:
+    env = {"WISHPOOL_POW": 0, "WISHPOOL_TRUST_PROXY": 1}
+    with Server(src_root, env, label="race") as srv:
         p = srv.port
         req(p, "GET", "/api/health")     # 先把 DB 初始化完,不要把建表算進競態
-        results = []
-        lock = threading.Lock()
+        n, rounds = 20, 6
 
-        def fire(i):
-            try:
-                status, _, _ = req(p, "POST", "/api/wishes",
-                                   {"title": "並行洗版測試願望編號 %02d" % i})
-            except Exception as exc:                      # noqa: BLE001
-                status = "EXC:" + type(exc).__name__
-            with lock:
-                results.append(status)
+        def burst(tag, source):
+            results = []
+            lock = threading.Lock()
+            ready = threading.Barrier(n + 1, timeout=60)
 
-        threads = [threading.Thread(target=fire, args=(i,)) for i in range(20)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=60)
-        created = results.count(201)
-        limited = results.count(429)
-        c.eq("20 個並行許願只有 5 個成功(預設上限)", created, 5)
-        c.eq("其餘全部是 429,沒有 500 或例外", limited, len(results) - created)
+            def fire(i):
+                body = json.dumps({"title": "並行洗版測試 %s 之 %02d 號願望" % (tag, i)},
+                                  ensure_ascii=False).encode("utf-8")
+                head = ("POST /api/wishes HTTP/1.1\r\n"
+                        "Host: 127.0.0.1\r\n"
+                        "X-Forwarded-For: %s\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n\r\n"
+                        % (source, len(body))).encode("utf-8")
+                status = "EXC:setup"
+                try:
+                    sock = socket.create_connection(("127.0.0.1", p), timeout=30)
+                    try:
+                        ready.wait()          # 連線都建好了,現在才一起送
+                        sock.sendall(head + body)
+                        data = b""
+                        while True:
+                            chunk = sock.recv(65536)
+                            if not chunk:
+                                break
+                            data += chunk
+                    finally:
+                        sock.close()
+                    parts = data.split(b" ")
+                    status = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+                except Exception as exc:                  # noqa: BLE001
+                    status = "EXC:" + type(exc).__name__
+                with lock:
+                    results.append(status)
+
+            threads = [threading.Thread(target=fire, args=(i,)) for i in range(n)]
+            for t in threads:
+                t.start()
+            ready.wait()
+            for t in threads:
+                t.join(timeout=60)
+            return results
+
+        for r in range(rounds):
+            results = burst("第%d輪" % (r + 1), "198.51.100.%d" % (60 + r))
+            created = results.count(201)
+            limited = results.count(429)
+            c.eq("第 %d 輪:20 個並行許願只有 5 個成功(預設上限)" % (r + 1), created, 5)
+            c.eq("第 %d 輪:其餘全部是 429,沒有 500 或例外" % (r + 1),
+                 limited, len(results) - created)
+
         status, data, _ = req(p, "GET", "/api/wishes?limit=200")
-        c.eq("資料庫裡真的只有 5 筆", data["total"], 5)
+        c.eq("資料庫裡真的只有 %d 筆" % (5 * rounds), data["total"], 5 * rounds)
 
 
 def suite_rounds(c, src_root):
@@ -471,6 +673,11 @@ def suite_rounds(c, src_root):
         _, data, _ = req(p, "POST", "/api/wishes", {"title": "輪次測試:比較少票的願望"},
                          headers={"X-Forwarded-For": "198.51.100.1"})
         low = data["wish"]["id"]
+        # 門檻只算別人的票(見 pick_winner),所以這一則也要有一張外部票,
+        # 才有資格在下一輪出線 —— 不然它會永遠卡在池子裡,而這一節要測的是
+        # 「第一名出線之後換第二名」,不是門檻本身(那在 suite_min_votes_external)。
+        req(p, "POST", "/api/wishes/%d/vote" % low,
+            headers={"X-Forwarded-For": "198.51.100.5"})
         _, data, _ = req(p, "POST", "/api/wishes", {"title": "輪次測試:應該要出線的願望"},
                          headers={"X-Forwarded-For": "198.51.100.2"})
         high = data["wish"]["id"]
@@ -506,6 +713,13 @@ def suite_rounds(c, src_root):
 
         _, data, _ = req(p, "GET", "/api/wishes/%d" % high)
         c.eq("得標願望狀態轉成 planned", data["wish"]["status"], "planned")
+
+        # 「已實現」是成品真的存在(granted),不是「有人接了」(planned)。
+        # 混在一起的話,結算完的那一刻首頁就會顯示「1 已實現」而其實什麼都還沒有。
+        _, health, _ = req(p, "GET", "/api/health")
+        c.eq("出線(planned)不算已實現", health["stats"]["granted"], 0)
+        c.ok("planned 另外記一欄", (health["stats"].get("planned") or 0) >= 1,
+             repr(health["stats"]))
         c.ok("得標願望自動寫了備註", "聯署第一名" in (data["wish"]["note"] or ""),
              repr(data["wish"]["note"]))
 
@@ -523,6 +737,106 @@ def suite_rounds(c, src_root):
         c.eq("管理端可以提前結算", status, 200)
         _, data, _ = req(p, "GET", "/api/wishes/%d" % low)
         c.eq("提前結算後第二名也出線", data["wish"]["status"], "planned")
+
+
+def suite_round_deadline(c, src_root):
+    """截止時間要真的是截止時間:過了才投的票不算這一輪的。
+
+    結算是由「下一個進來的請求」順手做的,而投票本身不會觸發結算 —— 所以
+    池子沒人來的那段時間裡投的票,如果用「現在的票數」算,就會回頭決定一個
+    早就該結束的輪次。這一節就是把那個縫故意拉開來量:先讓一輪過期、在沒有
+    任何讀取請求的情況下狂投第二名,再去讀 —— 冠軍必須還是截止前的第一名。
+    """
+    env = {"WISHPOOL_ADMIN_TOKEN": TOKEN, "WISHPOOL_CYCLE_SECONDS": 10,
+           "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
+           "WISHPOOL_TRUST_PROXY": 1, "WISHPOOL_POW": 0}
+    with Server(src_root, env, label="deadline") as srv:
+        p = srv.port
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "截止前就領先的願望"},
+                         headers={"X-Forwarded-For": "198.51.100.11"})
+        early = (data.get("wish") or {}).get("id")
+        for ip in ("198.51.100.12", "198.51.100.13"):
+            req(p, "POST", "/api/wishes/%d/vote" % early, headers={"X-Forwarded-For": ip})
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "截止後才被灌票的願望"},
+                         headers={"X-Forwarded-For": "198.51.100.14"})
+        late = (data.get("wish") or {}).get("id")
+
+        # 睡到這一輪確定過期(用伺服器自己回報的秒數,不用猜的)
+        _, data, _ = req(p, "GET", "/api/round")
+        c.eq("截止前的領先者是早投的那個", (data["round"].get("leader") or {}).get("id"), early)
+        time.sleep(max(0, data["round"]["seconds_left"]) + 1.5)
+
+        # 過期之後才投的票。投票不會觸發結算,所以這些票會在「還沒結算」的狀態下累積。
+        for i in range(5):
+            status, vd, _ = req(p, "POST", "/api/wishes/%d/vote" % late,
+                                headers={"X-Forwarded-For": "198.51.100.%d" % (20 + i)})
+            c.eq("截止後第 %d 張票有投進去" % (i + 1), status, 200)
+        _, data, _ = req(p, "GET", "/api/wishes/%d" % late)
+        c.ok("被灌票的那個現在票數比較多",
+             data["wish"]["votes"] > 3, "votes=%s" % data["wish"]["votes"])
+
+        # 現在才讀 → 這一刻才結算。冠軍必須是截止「當時」的第一名。
+        _, data, _ = req(p, "GET", "/api/round")
+        first = next((h for h in (data["round"].get("history") or []) if h["index"] == 1), {})
+        c.ok("過期的那一輪結算了", bool(first), repr(data["round"])[:300])
+        c.eq("冠軍是截止前的第一名,不是截止後被灌票的", first.get("winner_id"), early)
+        c.eq("記錄的票數是截止當時的票數", first.get("votes"), 3)
+        _, data, _ = req(p, "GET", "/api/wishes/%d" % late)
+        c.eq("截止後才衝上來的那個還留在池子裡", data["wish"]["status"], "open")
+
+
+def suite_min_votes_external(c, src_root):
+    """門檻只算別人的票:自己許的願,自己那一票不能把自己送上冠軍。
+
+    許願的人自動算一票,所以拿總票數比門檻的話,`min_votes=1` 等於沒有門檻 ——
+    零個人附議也能出線。這一節就是盯著那個縫。
+    """
+    env = {"WISHPOOL_ADMIN_TOKEN": TOKEN, "WISHPOOL_CYCLE_SECONDS": 6,
+           "WISHPOOL_RATE_WISH_MAX": 200, "WISHPOOL_RATE_VOTE_MAX": 500,
+           "WISHPOOL_TRUST_PROXY": 1, "WISHPOOL_POW": 0}
+    with Server(src_root, env, label="min-votes") as srv:
+        p = srv.port
+        _, data, _ = req(p, "POST", "/api/wishes", {"title": "只有許願者自己一票的願望"},
+                         headers={"X-Forwarded-For": "198.51.100.31"})
+        solo = (data.get("wish") or {}).get("id")
+        c.eq("許願者自動算一票", (data.get("wish") or {}).get("votes"), 1)
+
+        _, data, _ = req(p, "GET", "/api/round")
+        c.eq("只有自己那票時沒有領先者", data["round"].get("leader"), None)
+
+        # 等這一輪過去 —— 沒有別人的票,就不該有冠軍。
+        deadline = time.time() + 25
+        first = {}
+        while time.time() < deadline:
+            _, data, _ = req(p, "GET", "/api/round")
+            first = next((h for h in (data["round"].get("history") or [])
+                          if h["index"] == 1), {})
+            if first:
+                break
+            time.sleep(0.5)
+        c.ok("第 1 輪有結算", bool(first), repr(data.get("round"))[:300])
+        c.eq("沒有別人附議就沒有冠軍", first.get("winner_id"), None)
+        _, data, _ = req(p, "GET", "/api/wishes/%d" % solo)
+        c.eq("那則願望還留在池子裡", data["wish"]["status"], "open")
+
+        # 有一個別人附議之後,同一則就該出線。
+        status, _, _ = req(p, "POST", "/api/wishes/%d/vote" % solo,
+                           headers={"X-Forwarded-For": "198.51.100.32"})
+        c.eq("別人投得進去", status, 200)
+        _, data, _ = req(p, "GET", "/api/round")
+        c.eq("有了別人的票就有領先者", (data["round"].get("leader") or {}).get("id"), solo)
+
+        deadline = time.time() + 25
+        won = {}
+        while time.time() < deadline:
+            _, data, _ = req(p, "GET", "/api/round")
+            won = next((h for h in (data["round"].get("history") or [])
+                        if h.get("winner_id") == solo), {})
+            if won:
+                break
+            time.sleep(0.5)
+        c.ok("有別人附議之後就出線了", bool(won), repr(data.get("round"))[:300])
+        c.eq("記錄的票數是總票數(含自己那票)", won.get("votes"), 2)
 
 
 def suite_read_after_write(c, src_root):
@@ -688,6 +1002,24 @@ def suite_read_limits(c, src_root):
         status, _ = raw_get(p, "/robots.txt")
         c.eq("靜態檔不受 API 限流影響", status, 200)
 
+        # 但 /w/{id} 與 /sitemap.xml 會查資料庫、會組頁面,成本跟 API 同級,
+        # 所以它們**共用同一個桶**:上面那個來源已經打爆了,這兩條也該擋。
+        c.eq("/w/{id} 跟 API 共用讀取限流",
+             req(p, "GET", "/w/1", headers=ip)[0], 429)
+        c.eq("/sitemap.xml 跟 API 共用讀取限流",
+             req(p, "GET", "/sitemap.xml", headers=ip)[0], 429)
+        c.eq("沒被限流的來源照樣看得到願望頁",
+             req(p, "GET", "/w/1", headers={"X-Forwarded-For": "198.18.0.9"})[0], 404)
+
+        # 願望 id 的位數有上界:Python 3.11+ 對超長數字轉換有硬上限,不擋的話
+        # 一個匿名 GET 就能換到 500 + 一行錯誤日誌。
+        long_id = "9" * 5000
+        status, _ = raw_get(p, "/w/" + long_id, host="127.0.0.1")
+        c.eq("超長願望 id 回 404 而不是 500", status, 404)
+        status, data, _ = req(p, "GET", "/api/wishes/" + long_id,
+                              headers={"X-Forwarded-For": "198.18.0.10"})
+        c.eq("超長 API id 也回 404", status, 404)
+
         # 挑戰要另外限流:它可以先領後用,不限的話能先囤一堆算好的證明
         ip2 = {"X-Forwarded-For": "198.18.0.3"}
         ch = [req(p, "GET", "/api/challenge?kind=wish", headers=ip2)[0] for _ in range(8)]
@@ -764,6 +1096,11 @@ def urlencode(text):
     return quote(text)
 
 
+def as_text(value):
+    """HTML 回應在 parse() 之後仍然是 bytes,轉成字串才好逐字比對。"""
+    return as_bytes(value).decode("utf-8", "replace")
+
+
 def as_bytes(value):
     if isinstance(value, bytes):
         return value
@@ -787,7 +1124,9 @@ def read_db_text(db_path):
 
 def run_all(src_root):
     c = Checks()
-    for suite in (suite_core, suite_rate_limit, suite_rate_limit_race,
+    for suite in (suite_core, suite_share, suite_ipv6_source,
+                  suite_rate_limit, suite_rate_limit_race, suite_round_deadline,
+                  suite_min_votes_external,
                   suite_read_after_write, suite_rounds, suite_pow, suite_read_limits,
                   suite_csp_modes,
                   suite_readonly, suite_admin_disabled):
@@ -825,10 +1164,24 @@ MUTATIONS = [
      '        conn.execute("INSERT INTO pow_used(salt, ts) VALUES(?,?)",',
      "        _ = (lambda *a: None)("),
     ("拿掉讀取限流",
-     '            mem_limit("rd:" + hash_ip(self.real_ip()), RATE_READ_MAX)',
-     "            pass"),
+     '        mem_limit("rd:" + hash_ip(self.real_ip()), RATE_READ_MAX)',
+     "        pass"),
     ("拿掉輪次得標判定",
      "        winner = pick_winner(conn, ends)", "        winner = None"),
+    ("拿掉分享卡的跳脫(願望標題會被塞進 <title> 與 og: 屬性)",
+     "    esc = lambda s: html.escape(s, quote=True)  # noqa: E731",
+     "    esc = lambda s: s  # noqa: E731"),
+    ("拿掉 IPv6 來源收斂(一個人手上就有一整段 /64)",
+     '        return "%s/64" % net.network_address', "        return str(addr)"),
+    ("讓截止後才投的票也算進那一輪(截止時間就形同虛設)",
+     '"FROM wishes w JOIN votes v ON v.wish_id = w.id AND v.ts < ? "',
+     '"FROM wishes w JOIN votes v ON v.wish_id = w.id AND v.ts < ? + 99999999 "'),
+    ("讓許願者自己那一票也算進門檻(門檻 1 票就等於沒有門檻)",
+     '"HAVING SUM(CASE WHEN v.ip_hash <> w.ip_hash THEN 1 ELSE 0 END) >= ? "',
+     '"HAVING COUNT(v.wish_id) >= ? "'),
+    ("把「有人接了」也算成「已實現」(首頁就會顯示一個假的成品數)",
+     "\"SELECT COUNT(*) FROM wishes WHERE status='granted'\").fetchone()[0]",
+     "\"SELECT COUNT(*) FROM wishes WHERE status IN ('granted','planned')\").fetchone()[0]"),
 ]
 
 

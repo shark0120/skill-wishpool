@@ -15,6 +15,8 @@
     WISHPOOL_SALT_FILE              IP 雜湊用的鹽檔(預設 <db 同層>/ip_salt)
     WISHPOOL_TRUST_PROXY=1          相信 X-Forwarded-For 第一個位址(**只有**放在自己的
                                     反向代理後面才可以開,否則速率限制可被輕易繞過)
+    WISHPOOL_SITE_URL               對外網址(分享卡 og:/canonical/sitemap 用)。
+                                    沒設就從 Host 標頭推,通常不用設
 
 隱私:資料庫裡不存原始 IP,只存 sha256(salt + ip) 的前 32 個 hex,用來做速率限制與
 投票去重。鹽檔不進版控,換掉鹽就等於把舊的關聯全部斷掉。
@@ -26,6 +28,8 @@ import argparse
 import base64
 import hashlib
 import hmac
+import html
+import ipaddress
 import json
 import os
 import re
@@ -184,7 +188,12 @@ CFG = {
     "min_votes": MIN_VOTES_DEFAULT,
     "csp_mode": "hash",     # hash | unsafe-inline | off
     "pow": True,
+    "site_url": "",         # 對外網址;空的話從 Host 標頭推(見 Handler.site_origin)
 }
+
+# 分享卡與 sitemap 在沒有別的線索時用這個網址。自架的人不必改:伺服器會用
+# 請求自己的 Host 覆蓋掉它,真的要釘死才設 WISHPOOL_SITE_URL。
+SITE_URL_DEFAULT = "https://skill-tw.com"
 
 
 # ── 小工具 ───────────────────────────────────────────────────────────────
@@ -215,8 +224,36 @@ def load_salt(path: str) -> bytes:
     return salt
 
 
+def source_key(ip: str) -> str:
+    """把來源收斂成「同一個人大概拿得到的那一組位址」,再拿去雜湊。
+
+    IPv4 就是那個位址;**IPv6 一定要收到 /64**。理由:ISP 與 VPS 配 IPv6 是
+    一次給一整段 /64,一個人手上就有 1.8×10^19 個位址。用完整位址當來源的話,
+    速率限制與「一人一票」對任何有 IPv6 的人都等於不存在 —— 換一個位址就是
+    一張新票,而且完全不必偽造任何標頭。
+
+    代價寫清楚:同一段 /64 底下的人會共用一票(同一戶、同一間公司)。這跟
+    IPv4 的 NAT 是同一類的取捨,而且是**有界**的;用完整位址是無界的。
+    """
+    raw = (ip or "").strip()
+    if raw.startswith("[") and "]" in raw:          # [::1]:8787 這種寫法
+        raw = raw[1:raw.index("]")]
+    raw = raw.split("%")[0]          # 去掉 zone id(fe80::1%eth0):留著的話,主機位元
+    try:                             # 全 0 的位址會把 zone 帶進鍵值,同一段 /64 就能生出無限個來源
+        addr = ipaddress.ip_address(raw)
+    except ValueError:
+        return raw[:64]                              # 不是位址就原樣用,不要靜靜放行
+    if addr.version == 6:
+        if addr.ipv4_mapped is not None:             # ::ffff:203.0.113.7
+            return str(addr.ipv4_mapped)
+        net = ipaddress.ip_network("%s/64" % addr, strict=False)
+        return "%s/64" % net.network_address
+    return str(addr)
+
+
 def hash_ip(ip: str) -> str:
-    return hashlib.sha256(CFG["salt"] + b"|" + ip.encode("utf-8", "replace")).hexdigest()[:32]
+    key = source_key(ip)
+    return hashlib.sha256(CFG["salt"] + b"|" + key.encode("utf-8", "replace")).hexdigest()[:32]
 
 
 def connect() -> sqlite3.Connection:
@@ -517,10 +554,15 @@ def stats(conn) -> dict:
         "WHERE status IN (%s)" % ",".join("?" * len(PUBLIC_STATUSES)),
         PUBLIC_STATUSES,
     ).fetchone()
+    # 「已實現」只算 granted。planned 是「有人接了」,成品還不存在 —— 兩個加在
+    # 一起,首頁就會在什麼都還沒交出來的那一刻顯示「1 已實現」,而那是假的。
+    # 想知道有幾個在做的看 planned 這欄。
     granted = conn.execute(
-        "SELECT COUNT(*) FROM wishes WHERE status IN ('granted','planned')"
-    ).fetchone()[0]
-    return {"wishes": row["n"], "votes": row["v"], "granted": granted}
+        "SELECT COUNT(*) FROM wishes WHERE status='granted'").fetchone()[0]
+    planned = conn.execute(
+        "SELECT COUNT(*) FROM wishes WHERE status='planned'").fetchone()[0]
+    return {"wishes": row["n"], "votes": row["v"], "granted": granted,
+            "planned": planned}
 
 
 def register_vote(conn, wish_id: int, ip_hash: str):
@@ -571,12 +613,30 @@ def round_bounds(anchor: int, idx: int):
 
 
 def pick_winner(conn, before_ts: int):
-    """某個時間點的第一名:只看 open 的願望、票數要達門檻,同票者先許願的贏。"""
+    """某個時間點的第一名:只看 open 的願望,同票者先許願的贏。
+
+    兩件事情刻意這樣算:
+
+    **票數是當時的票數**,不是現在的:從 votes 表數 ts < 截止時間的那些。用
+    wishes.votes(現在的總數)算會讓截止時間形同虛設 —— 結算是由「下一個進來的
+    請求」順手做的,所以池子沒人來的那幾個小時裡投的票,會回頭決定一個早就該
+    結束的輪次;停機幾天再開機更誇張,今天的票會決定上週的冠軍。
+
+    **門檻只算別人的票**:許願的人自動就有一票(register_vote),所以拿總票數
+    比門檻,`min_votes=1` 等於沒有門檻 —— 自己許的願自己就湊滿了,零個人附議
+    也能被封為該輪冠軍。這裡數的是 `votes.ip_hash <> wishes.ip_hash` 的票,
+    門檻的意思因此是「至少有這麼多**別人**要」。排名仍然用總票數(每個願望都
+    多自己那一票,是同一個常數,不影響先後)。
+    """
     return conn.execute(
-        "SELECT id, title, votes FROM wishes "
-        "WHERE status='open' AND votes >= ? AND julianday(created_at) < julianday(?, 'unixepoch') "
-        "ORDER BY votes DESC, id ASC LIMIT 1",
-        (CFG["min_votes"], before_ts),
+        "SELECT w.id AS id, w.title AS title, COUNT(v.wish_id) AS votes, "
+        "       SUM(CASE WHEN v.ip_hash <> w.ip_hash THEN 1 ELSE 0 END) AS others "
+        "FROM wishes w JOIN votes v ON v.wish_id = w.id AND v.ts < ? "
+        "WHERE w.status='open' AND julianday(w.created_at) < julianday(?, 'unixepoch') "
+        "GROUP BY w.id "
+        "HAVING SUM(CASE WHEN v.ip_hash <> w.ip_hash THEN 1 ELSE 0 END) >= ? "
+        "ORDER BY votes DESC, w.id ASC LIMIT 1",
+        (before_ts, before_ts, CFG["min_votes"]),
     ).fetchone()
 
 
@@ -584,7 +644,10 @@ def ensure_rounds(conn) -> None:
     """把所有已經過期、但還沒結算的輪次補結算掉。
 
     沒有 cron、沒有背景執行緒 —— 任何一個 API 請求進來都會順手做這件事。
-    伺服器關機期間的輪次會補記成「沒有結算」,不會假裝當時有人得標。
+
+    停機期間過掉的輪次:最近 SETTLE_MAX 輪照樣結算,但用的是**當時**的票
+    (pick_winner 只數截止前投的),所以是把當時的結果補記下來,不是拿今天的
+    票去封上週的冠軍;更早的那些連補都不補,誠實記成「這一輪沒有結算」。
     """
     if CFG["readonly"]:
         return
@@ -684,6 +747,88 @@ STATIC_TYPES = {
     ".xml": "application/xml; charset=utf-8",
 }
 
+# ── 分享卡(og:)─────────────────────────────────────────────────────────
+# 這個站是靠人把連結貼到 LINE / Threads / X / Discord 才長大的,所以「貼出去
+# 長什麼樣」是產品的一部分,不是 SEO 的裝飾。兩件事在這裡做:
+#   1. 網址一律換成**這台伺服器自己的來源**,別人 clone 去自架不會指回 skill-tw.com。
+#   2. /w/{id} 進來時,標題與說明換成那一個願望 —— 分享的是願望,不是首頁。
+# public/index.html 裡那段預設值(靜態託管唯一看得到的版本)必須跟這裡產生的
+# 位元組一模一樣,selftest 會逐位元組比對,免得兩邊各改各的。
+_META_BLOCK = re.compile(rb"<!-- meta:start.*?<!-- meta:end -->", re.S)
+_HOST_OK = re.compile(r"^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$")
+
+PAGE_TITLE = "Skill 許願池"
+PAGE_DESC = ("Skill 許願池 — 你想要什麼 AI skill?丟一個願望進池子,大家聯署。"
+             "每三天結算一次,票最高的那一個就做成 skill。不用註冊。")
+SHARE_TITLE = "Skill 許願池 — 你想要什麼 AI skill?"
+SHARE_DESC = ("丟一個願望進池子,大家聯署。每三天結算一次,票最高的那一個就做成 skill。"
+              "不用註冊、不放 cookie、不追蹤。")
+OG_ALT = "Skill 許願池 — 你想要什麼 AI skill?丟進池子,大家聯署。"
+WISH_DESC_TAIL = "在 Skill 許願池聯署中 ・ 每三天結算一次,票最高的那一個就做成 skill。"
+
+
+def one_line(text: str, limit: int) -> str:
+    """壓成一行再截斷 —— og: 全部是屬性值,換行會讓爬蟲讀到半句話。"""
+    flat = " ".join((text or "").split())
+    return flat if len(flat) <= limit else flat[:limit - 1].rstrip() + "…"
+
+
+def wish_share_text(wish: dict) -> tuple:
+    """(頁面標題, 分享標題, 說明)。刻意不寫票數:爬蟲會把卡片快取住,
+    寫了就會有一張永遠停在「3 票」的卡片在外面流傳。"""
+    short = one_line(wish["title"], 80)
+    detail = one_line(wish.get("detail") or "", 100)
+    desc = (detail + " ・ " + WISH_DESC_TAIL) if detail else WISH_DESC_TAIL
+    return (short + " — " + PAGE_TITLE, "願望:" + short, desc)
+
+
+def meta_block(origin: str = SITE_URL_DEFAULT, wish=None) -> bytes:
+    origin = (origin or SITE_URL_DEFAULT).rstrip("/")
+    if wish:
+        page_title, share_title, desc = wish_share_text(wish)
+        page_desc = desc
+        url = "%s/w/%d" % (origin, wish["id"])
+    else:
+        page_title, share_title, desc = PAGE_TITLE, SHARE_TITLE, SHARE_DESC
+        page_desc = PAGE_DESC
+        url = origin + "/"
+    esc = lambda s: html.escape(s, quote=True)  # noqa: E731
+    lines = [
+        "<!-- meta:start 分享卡 ─────────────────────────────────────────────────",
+        "     這一段決定連結貼進 LINE / Threads / X / Discord 之後對方看到什麼。",
+        "     完整版由 server.py 的 meta_block() 依請求重寫(換成這台的網址、",
+        "     或換成 /w/{id} 那一個願望);靜態託管沒有伺服器,看到的就是這組預設值。",
+        "     ⚠️ 這是產物:改文案請改 server.py,再跑 python3 scripts/sync_meta.py。",
+        "     og:image 是 public/og.png,產生器在 scripts/make_og.py。          -->",
+        '<meta name="description" content="%s">' % esc(page_desc),
+        "<title>%s</title>" % esc(page_title),
+        '<link rel="canonical" href="%s">' % esc(url),
+        '<meta property="og:type" content="website">',
+        '<meta property="og:site_name" content="%s">' % esc(PAGE_TITLE),
+        '<meta property="og:locale" content="zh_TW">',
+        '<meta property="og:url" content="%s">' % esc(url),
+        '<meta property="og:title" content="%s">' % esc(share_title),
+        '<meta property="og:description" content="%s">' % esc(desc),
+        '<meta property="og:image" content="%s/og.png">' % esc(origin),
+        '<meta property="og:image:width" content="1200">',
+        '<meta property="og:image:height" content="630">',
+        '<meta property="og:image:alt" content="%s">' % esc(OG_ALT),
+        '<meta name="twitter:card" content="summary_large_image">',
+        '<meta name="twitter:title" content="%s">' % esc(share_title),
+        '<meta name="twitter:description" content="%s">' % esc(desc),
+        '<meta name="twitter:image" content="%s/og.png">' % esc(origin),
+        "<!-- meta:end -->",
+    ]
+    return "\n".join(lines).encode("utf-8")
+
+
+def apply_meta(body: bytes, origin: str, wish=None) -> bytes:
+    """換掉標記之間那一段。標記不見了就原樣送出 —— 寧可分享卡是預設的,
+    也不要因為有人手改了 HTML 就讓整頁掛掉。"""
+    block = meta_block(origin, wish)
+    return _META_BLOCK.sub(lambda _m: block, body, count=1)
+
+
 _INLINE_BLOCK = re.compile(rb"<(script|style)\b[^>]*>(.*?)</\1\s*>", re.S | re.I)
 _csp_cache = {}
 
@@ -731,7 +876,10 @@ def csp_for_html(body: bytes) -> str:
         "style-src " + (" ".join(styles) or "'none'"),
         "script-src " + (" ".join(scripts) or "'none'"),
     ])
-    _csp_cache.clear()
+    # 有了 /w/{id} 之後,同一台會送出很多個只差幾行 meta 的 HTML,快取只留一份
+    # 就等於每次都重算。留 32 份、滿了就整組丟掉(這裡不需要真的 LRU)。
+    if len(_csp_cache) >= 32:
+        _csp_cache.clear()
     _csp_cache[key] = policy
     return policy
 
@@ -750,6 +898,15 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write("%s [%s] %s\n" % (
             datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             hash_ip(self.real_ip())[:8], fmt % args))
+
+    def read_limit(self):
+        """讀取限流。API 與「會查 DB 才組得出來」的頁面(/w/{id}、/sitemap.xml)
+        共用同一條 —— 純檔案的靜態檔不算,那只是讀一個檔。
+
+        Cloudflare 的 Browser Integrity Check 關掉之後,這裡就是唯一擋狂打的地方。
+        給得很寬(每分鐘 240 次),正常瀏覽一次頁面只用 3 次。
+        """
+        mem_limit("rd:" + hash_ip(self.real_ip()), RATE_READ_MAX)
 
     def real_ip(self) -> str:
         if CFG["trust_proxy"]:
@@ -874,11 +1031,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_err(500, "伺服器出錯了,已記錄。", "server_error")
 
     def api(self, path, query):
-        # 讀取限流:Cloudflare 的 Browser Integrity Check 關掉之後,這裡就是唯一
-        # 擋狂打的地方。給得很寬(每分鐘 240 次),正常瀏覽一次頁面只用 3 次。
-        if self.command in ("GET", "HEAD"):
-            mem_limit("rd:" + hash_ip(self.real_ip()), RATE_READ_MAX)
-
         """⚠️ 所有 handler 都遵守一條規則:**先讓交易提交,才送出回應。**
 
         `with connect() as conn:` 是在離開區塊時才 commit。如果在區塊**裡面**就把
@@ -887,6 +1039,8 @@ class Handler(BaseHTTPRequestHandler):
         這個 bug 在 Windows 上剛好贏得 race 所以測不出來,在 Linux 上就穩定失敗。
         所以:payload 在 with 裡面組好,send_json 一律寫在 with 外面。
         """
+        if self.command in ("GET", "HEAD"):
+            self.read_limit()
         method = "GET" if self.command == "HEAD" else self.command
 
         if path == "/api/health" and method == "GET":
@@ -991,7 +1145,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, merged)
             return self.send_json(201, created)
 
-        m = re.fullmatch(r"/api/wishes/(\d+)/vote", path)
+        m = re.fullmatch(r"/api/wishes/(\d{1,12})/vote", path)
         if m and method == "POST":
             self.guard_write()
             wish_id = int(m.group(1))
@@ -1010,7 +1164,7 @@ class Handler(BaseHTTPRequestHandler):
                 payload = {"ok": True, "votes": votes, "already_voted": already}
             return self.send_json(200, payload)
 
-        m = re.fullmatch(r"/api/wishes/(\d+)", path)
+        m = re.fullmatch(r"/api/wishes/(\d{1,12})", path)
         if m and method == "GET":
             with connect() as conn:
                 row = conn.execute("SELECT * FROM wishes WHERE id=?",
@@ -1020,7 +1174,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "wish": row_to_wish(row)})
 
         # ── 管理端:沒設權杖就整組關閉 ──────────────────────────────
-        m = re.fullmatch(r"/api/admin/wishes/(\d+)", path)
+        m = re.fullmatch(r"/api/admin/wishes/(\d{1,12})", path)
         if m and method == "POST":
             self.require_admin()
             wish_id = int(m.group(1))
@@ -1089,8 +1243,102 @@ class Handler(BaseHTTPRequestHandler):
 
         return self.send_err(404, "沒有這個 API。", "not_found")
 
+    # ── 對外網址 ────────────────────────────────────────────────────────
+    def site_origin(self) -> str:
+        """這台伺服器對外長什麼樣。優先吃 WISHPOOL_SITE_URL,再來才看 Host。
+
+        Host 是用戶端自己送的,所以先過一遍白名單字元再用,而且它只會出現在
+        **回給同一個請求**的 meta 裡(HTML 送的是 no-cache),影響不到別人。
+        """
+        base = CFG.get("site_url")
+        if base:
+            return base
+        host = (self.headers.get("Host") or "").strip()
+        if not _HOST_OK.match(host):
+            return SITE_URL_DEFAULT
+        proto = "http"
+        if CFG["trust_proxy"]:
+            fwd = (self.headers.get("X-Forwarded-Proto") or "https").split(",")[0].strip()
+            proto = fwd if fwd in ("http", "https") else "https"
+        return proto + "://" + host
+
     # ── 靜態檔 ──────────────────────────────────────────────────────────
+    def send_html(self, body: bytes, status: int = 200):
+        self.send_response(status)
+        self.send_header("Content-Type", STATIC_TYPES[".html"])
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        policy = csp_for_html(body)
+        if policy:
+            self.send_header("Content-Security-Policy", policy)
+        self.base_headers()
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def read_page(self):
+        with open(os.path.join(PUBLIC_DIR, "index.html"), "rb") as fh:
+            return fh.read()
+
+    def wish_page(self, wish_id: int):
+        """/w/{id} —— 一個願望自己的網址。
+
+        頁面本體跟首頁是同一份 HTML(前端會把那個願望撈出來釘在最上面),
+        差別在 <title> 與 og: 換成這個願望 —— 沒有這一步,分享出去的每一則
+        都長得一模一樣,聯署這件事就傳不出去。
+        """
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM wishes WHERE id=? AND status!='hidden'",
+                (wish_id,)).fetchone()
+            wish = row_to_wish(row) if row is not None else None
+        body = apply_meta(self.read_page(), self.site_origin(), wish)
+        # 找不到就 404(爬蟲別收錄),但照樣把整個池子送出去 —— 人點進來
+        # 看到的是池子,不是一片空白的錯誤頁。
+        self.send_html(body, 200 if wish else 404)
+
+    def sitemap(self):
+        """動態 sitemap:首頁 + 每一個公開願望。願望有自己的網址就該讓人搜得到。"""
+        origin = self.site_origin()
+        rows = []
+        with connect() as conn:
+            rows = conn.execute(
+                "SELECT id, updated_at FROM wishes WHERE status!='hidden' "
+                "ORDER BY id DESC LIMIT 5000").fetchall()
+        out = ['<?xml version="1.0" encoding="UTF-8"?>',
+               '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+               "  <url><loc>%s/</loc><changefreq>daily</changefreq>"
+               "<priority>1.0</priority></url>" % html.escape(origin, quote=True)]
+        for row in rows:
+            out.append("  <url><loc>%s/w/%d</loc><lastmod>%s</lastmod>"
+                       "<changefreq>daily</changefreq><priority>0.7</priority></url>"
+                       % (html.escape(origin, quote=True), row["id"],
+                          html.escape((row["updated_at"] or "").split(" ")[0],
+                                      quote=True)))
+        out.append("</urlset>")
+        body = "\n".join(out).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", STATIC_TYPES[".xml"])
+        self.send_header("Content-Length", str(len(body)))
+        # 網址是從用戶端送的 Host 推來的時候**不能**讓共用快取存下來:有人帶假
+        # Host 打一次,別人就會拿到指向那個網域的 sitemap。只有 WISHPOOL_SITE_URL
+        # 釘死時內容才是對所有人一樣的,那時才給公開快取。
+        self.send_header("Cache-Control",
+                         "public, max-age=600" if CFG.get("site_url") else "no-store")
+        self.base_headers()
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
     def static(self, path):
+        # 位數有界:超長數字會讓 int() 丟例外,那該是 404 不是 500 加一行錯誤日誌。
+        m = re.fullmatch(r"/w/(\d{1,12})/?", path)
+        if m:
+            self.read_limit()          # 這兩條會查 DB、組頁面,成本跟 API 同級
+            return self.wish_page(int(m.group(1)))
+        if path == "/sitemap.xml":
+            self.read_limit()
+            return self.sitemap()
         rel = path.lstrip("/") or "index.html"
         if rel.endswith("/"):
             rel += "index.html"
@@ -1108,15 +1356,14 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return self.send_err(404, "找不到檔案。", "not_found")
 
+        if ext == ".html":
+            # 首頁也要重寫:分享卡裡的網址得是這台自己的來源,不是 skill-tw.com。
+            return self.send_html(apply_meta(body, self.site_origin()))
+
         self.send_response(200)
         self.send_header("Content-Type", STATIC_TYPES[ext])
         self.send_header("Content-Length", str(len(body)))
-        if ext == ".html":
-            self.send_header("Cache-Control", "no-cache")
-            policy = csp_for_html(body)
-            if policy:
-                self.send_header("Content-Security-Policy", policy)
-        elif ext == ".json":
+        if ext == ".json":
             self.send_header("Cache-Control", "no-cache")
         else:
             self.send_header("Cache-Control", "public, max-age=3600")
@@ -1206,6 +1453,13 @@ def main(argv=None):
     CFG["allow_origin"] = os.environ.get("WISHPOOL_ALLOW_ORIGIN", "")
     CFG["trust_proxy"] = os.environ.get("WISHPOOL_TRUST_PROXY", "") == "1"
     CFG["pow"] = os.environ.get("WISHPOOL_POW", "1") != "0"
+    # 分享卡與 sitemap 用的對外網址。沒設就從每個請求的 Host 推,設了就釘死 ——
+    # 前面那層代理如果沒把 Host 傳過來(或你要強制 https),就設這個。
+    site_url = os.environ.get("WISHPOOL_SITE_URL", "").strip().rstrip("/")
+    if site_url and not site_url.startswith(("http://", "https://")):
+        sys.stderr.write("[warn] WISHPOOL_SITE_URL 要以 http:// 或 https:// 開頭,已忽略\n")
+        site_url = ""
+    CFG["site_url"] = site_url
     csp = os.environ.get("WISHPOOL_CSP", "hash")
     CFG["csp_mode"] = csp if csp in ("hash", "unsafe-inline", "off") else "hash"
     CFG["salt"] = load_salt(os.environ.get(

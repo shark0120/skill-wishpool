@@ -4,8 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<!-- meta:start 分享卡 ─────────────────────────────────────────────────
+     這一段決定連結貼進 LINE / Threads / X / Discord 之後對方看到什麼。
+     完整版由 server.py 的 meta_block() 依請求重寫(換成這台的網址、
+     或換成 /w/{id} 那一個願望);靜態託管沒有伺服器,看到的就是這組預設值。
+     ⚠️ 這是產物:改文案請改 server.py,再跑 python3 scripts/sync_meta.py。
+     og:image 是 public/og.png,產生器在 scripts/make_og.py。          -->
 <meta name="description" content="Skill 許願池 — 你想要什麼 AI skill?丟一個願望進池子,大家聯署。每三天結算一次,票最高的那一個就做成 skill。不用註冊。">
 <title>Skill 許願池</title>
+<link rel="canonical" href="https://skill-tw.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Skill 許願池">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:url" content="https://skill-tw.com/">
+<meta property="og:title" content="Skill 許願池 — 你想要什麼 AI skill?">
+<meta property="og:description" content="丟一個願望進池子,大家聯署。每三天結算一次,票最高的那一個就做成 skill。不用註冊、不放 cookie、不追蹤。">
+<meta property="og:image" content="https://skill-tw.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Skill 許願池 — 你想要什麼 AI skill?丟進池子,大家聯署。">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Skill 許願池 — 你想要什麼 AI skill?">
+<meta name="twitter:description" content="丟一個願望進池子,大家聯署。每三天結算一次,票最高的那一個就做成 skill。不用註冊、不放 cookie、不追蹤。">
+<meta name="twitter:image" content="https://skill-tw.com/og.png">
+<!-- meta:end -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='none' stroke='%230A6C87' stroke-width='2.6' stroke-linecap='round' d='M4 11c4-3 8-3 12 0s8 3 12 0M4 18c4-3 8-3 12 0s8 3 12 0M4 25c4-3 8-3 12 0s8 3 12 0'/%3E%3C/svg%3E">
 <style>
 /* ══ 重置 ══════════════════════════════════════════════════════════════ */
@@ -378,6 +400,14 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 .wish-foot{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.5rem 0 0}
 .granted-link{font-size:.86rem;font-weight:600;display:inline-flex;align-items:center;
               gap:.3rem;min-height:44px}
+/* 分享:這個池子只有一條長大的路 —— 有人把某一則貼給別人。所以每張卡都給它
+   一顆,而且是**這一則**的網址(/w/{id}),不是首頁。
+   顏色刻意用 --faint 不用 --accent:附議才是主行動,分享不該搶它的視覺重量。 */
+.share{background:none;border:none;color:var(--faint);font-size:.82rem;font-weight:600;
+       display:inline-flex;align-items:center;gap:.28rem;min-height:44px;
+       padding:0 .3rem;margin-left:auto}
+.share:hover{background:none;color:var(--accent);text-decoration:underline}
+.share .i{width:1em;height:1em}
 
 /* ══ 狀態 ══════════════════════════════════════════════════════════════ */
 .notice{background:var(--bg2);border:1px solid var(--rule);border-left:3px solid var(--accent);
@@ -862,10 +892,24 @@ animejs/dist/modules/index.js:
 /* ── 設定:自架的人只要改這裡 ──────────────────────────────────────── */
 const CONFIG = {
   repo: 'https://github.com/shark0120/skill-wishpool',
-  api: '',            // 空字串 = 同源;要接別台就填 'https://example.com'
+  api: '',            // 空字串 = 同源;要接別台就填 'https://example.com'(結尾的斜線可有可無)
   staticData: 'wishes.json',
   pageSize: 30,
 };
+
+/* 這一頁的根。**不能直接用相對路徑** —— 願望有了自己的網址之後,同一份 HTML 會在
+   /w/13 底下被載入,那時候 fetch('api/wishes') 會跑去打 /w/api/wishes(404,
+   整個池子空白)。所以這裡把根算出來一次:
+     /            → /            /index.html   → /
+     /w/13        → /            /skill/w/13   → /skill/     (放在子目錄也對)  */
+const PAGE_BASE = (() => {
+  const deep = location.pathname.match(/^(.*\/)w\/\d+\/?$/);
+  return deep ? deep[1] : location.pathname.replace(/[^/]*$/, '');
+})();
+/* API 根:同源時就是 PAGE_BASE;CONFIG.api 有填就以它為準(順便補結尾斜線 ——
+   不補的話 'https://x.com' + 'api/…' 會黏成 'https://x.comapi/…')。
+   **這兩個不能共用**:接別台 API 時 API_BASE 是絕對網址,拿去組頁面網址會壞。 */
+const API_BASE = CONFIG.api ? CONFIG.api.replace(/\/*$/, '/') : PAGE_BASE;
 
 /* ── DOM 小工具 ────────────────────────────────────────────────────────
    使用者輸入一律走 textContent,永不碰 HTML 注入接口 —— 這是 XSS 的防線,
@@ -1308,9 +1352,16 @@ function toast(msg, bad) {
 }
 
 /* ══ API ════════════════════════════════════════════════════════════════ */
+/* 逾時:沒有它的話,一個卡住(不是失敗)的請求會讓頁面永遠停在骨架 ——
+   連「後端掛了就退成唯讀」那條退路都走不到,因為 promise 根本不會結束。 */
+const TIMEOUT_MS = 15000;
+const timeoutSignal = () => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+  ? AbortSignal.timeout(TIMEOUT_MS) : undefined);
+
 async function api(path, opts = {}) {
-  const res = await fetch(CONFIG.api + path, {
+  const res = await fetch(API_BASE + path, {
     headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
+    signal: timeoutSignal(),
     ...opts,
   });
   let data = {};
@@ -1401,13 +1452,14 @@ function renderRound() {
     box.appendChild(el('div', { class: 'leader' }, [
       el('span', { class: 'mark' }, [icon('water')]),
       el('span', { class: 't', text: live
-        ? '這一輪還沒有願望達到 ' + r.min_votes + ' 票的門檻。'
+        ? '這一輪還沒有願望拿到 ' + r.min_votes + ' 張別人的票。'
         : '這是唯讀快照,沒有進行中的聯署。自己架一個池子就會開始計時。' }),
     ]));
   }
 
   box.appendChild(el('p', { class: 'round-rule',
-    text: '一人一票。結算時票最高的出線(同票先許願的贏),出線後離開候選,'
+    text: '一人一票,許願的人自動算一票 —— 但門檻只看別人投的,自己那票不算。'
+        + '結算時票最高的出線(同票先許願的贏),出線後離開候選,'
         + '沒選上的票繼續累積到下一輪。' }));
 
   if (r.history && r.history.length) {
@@ -1549,6 +1601,14 @@ function card(w) {
     }, [document.createTextNode('看成品'), icon('link')]));
   }
   if (w.note) foot.appendChild(el('span', { class: 'meta', text: '「' + w.note + '」' }));
+
+  const share = el('button', {
+    class: 'share', type: 'button',
+    'aria-label': '分享「' + w.title + '」的連結',
+  }, [icon('link'), el('span', { text: '分享', 'aria-hidden': 'true' })]);
+  share.addEventListener('click', () => shareWish(w));
+  foot.appendChild(share);
+
   body.appendChild(foot);
 
   vote.addEventListener('click', () => doVote(w, vote));
@@ -1584,8 +1644,12 @@ function renderList(append) {
         ? '這個條件下沒有願望。' : '池子是空的,你可以是第一個。' }),
     ]));
   } else {
-    const start = append ? list.querySelectorAll('.wish').length : 0;
-    const fresh = state.wishes.slice(start).map((w) => {
+    /* 起點不能用「DOM 裡有幾張卡」來算:被分享的那一則會被釘到最前面(見
+       focusWish),資料就比 DOM 的排序多一筆、順序也不同 —— 用數量切會少畫
+       一則,還可能畫出兩張同 id 的卡。改成看「這一張已經在畫面上了嗎」。 */
+    const seen = new Set(Array.prototype.map.call(
+      list.querySelectorAll('.wish'), (n) => n.id));
+    const fresh = state.wishes.filter((w) => !append || !seen.has('w' + w.id)).map((w) => {
       const li = card(w);
       list.appendChild(li);
       return li;
@@ -1648,6 +1712,99 @@ async function load(append) {
   } finally {
     state.busy = false;
   }
+}
+
+/* ══ 分享一則願望 ═══════════════════════════════════════════════════════
+   聯署要成立,一則願望就得能被單獨傳出去 —— 不然只有站長喊得動人。
+   live 模式給 /w/{id}:伺服器會把 <title> 與 og: 換成那一則,貼進 LINE、
+   Threads、X、Discord 看到的是**那個願望**,不是千篇一律的首頁。
+   靜態託管沒有那條路由,退回同一頁的 #w{id}:捲得到,只是分享卡是預設那張。 */
+function wishUrl(w) {
+  const id = (w && w.id != null) ? w.id : w;
+  /* 兩種情況這一頁自己沒有 /w/{id} 路由:靜態託管(GitHub Pages),以及
+     CONFIG.api 指到別台(這一頁只是張靜態 HTML,後端在別的網域)。
+     那就退回同一頁的 #w{id} 錨點 —— 網址活的、捲得到,只是分享卡是預設那張。 */
+  if (state.mode === 'static' || CONFIG.api) {
+    return location.origin + location.pathname + '#w' + id;
+  }
+  return location.origin + PAGE_BASE + 'w/' + id;
+}
+
+/* 桌機用複製、手機才叫系統分享面板:桌機的分享面板要多按兩下才貼得出去,
+   直接進剪貼簿比較快。 */
+const nativeShare = () => !!navigator.share && matchMedia('(pointer:coarse)').matches;
+
+/* http:// 或沒授權時 navigator.clipboard 會掛,退回老方法(仍然不碰 innerHTML)。 */
+function copyFallback(text) {
+  const box = el('textarea', { text: text });
+  box.setAttribute('readonly', '');
+  box.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+  document.body.appendChild(box);
+  box.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  box.remove();
+  return ok;
+}
+
+async function shareWish(w) {
+  const url = wishUrl(w);
+  const done = '連結複製好了 —— 貼給朋友,他按附議就多一票。';
+  if (nativeShare()) {
+    try {
+      await navigator.share({ title: w.title + ' — Skill 許願池', url: url });
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;   // 使用者自己取消,不要再彈東西
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast(done);
+    return;
+  } catch (err) { /* 掉到下面的老方法 */ }
+  const copied = copyFallback(url);
+  toast(copied ? done : url, !copied);   // 連老方法都失敗:把網址顯示出來讓人自己抄
+}
+
+/* 進站時網址就指名了某一則:/w/13(伺服器路由)或 #w13(靜態退路)。 */
+function wishFromLocation() {
+  const deep = location.pathname.match(/\/w\/(\d+)\/?$/);
+  if (deep) return deep[1];
+  const hash = location.hash.match(/^#w(\d+)$/);
+  return hash ? hash[1] : '';
+}
+const ENTRY_WISH = wishFromLocation();
+const ENTRY_SHARED = /\/w\/\d+\/?$/.test(location.pathname);
+
+/* 被分享來的那一則不一定在第一頁(熱門排序、或它已經沉下去了),
+   所以撈出來釘在最上面 —— 點進來要看得到它,不是「自己找找看」。 */
+async function focusWish(id) {
+  const same = (w) => String(w.id) === String(id);
+  let hit = state.wishes.filter(same)[0] || null;
+  if (!hit && state.mode === 'static') {
+    hit = state.all.filter(same)[0] || null;
+  } else if (!hit) {
+    // 熱門排序下它可能已經沉到第二頁以後,所以直接指名撈一筆回來。
+    try { hit = (await api('api/wishes/' + id)).wish; } catch (err) { hit = null; }
+  }
+  if (!hit) {
+    toast('這個願望不在池子裡了,下面是現在的池子。', true);
+    return false;
+  }
+  state.wishes = [hit].concat(state.wishes.filter((w) => String(w.id) !== String(hit.id)));
+  renderList(false);
+  flash(hit.id);
+  return true;
+}
+
+function sharedNotice() {
+  $('mode-notice').appendChild(el('div', { class: 'notice', role: 'status' }, [
+    el('b', { text: '有人把這個願望分享給你。' }),
+    document.createTextNode(' 它被釘在最上面了 —— 覺得該做就按附議,'),
+    el('a', { href: PAGE_BASE, text: '也可以看整個池子' }),
+    document.createTextNode('。'),
+  ]));
 }
 
 /* ══ 附議 ═══════════════════════════════════════════════════════════════ */
@@ -1726,8 +1883,13 @@ async function submitWish(ev) {
     pool.drop(0.5, 2);      // 新願望 = 焰橘那一滴,從正中央落下
     await load(false);
     refreshRound();
+    // 剛丟進去的願望只有一票(自己那票)。這是整個流程裡唯一「他一定還在看」的
+    // 瞬間,所以直接把游標放到分享鍵上,並且在提示裡講清楚為什麼要分享。
+    const shareBtn = document.querySelector('#w' + data.wish.id + ' .share');
+    if (shareBtn) shareBtn.focus({ preventScroll: true });
     toast(data.merged ? (data.message || '有人許過一樣的願了,幫你加上一票。')
-                      : '願望丟進池子了,第 ' + data.wish.id + ' 號');
+                      : '願望丟進池子了,第 ' + data.wish.id
+                        + ' 號。按「分享」貼給朋友 —— 他按附議就多一票。');
   } catch (err) {
     const target = { title: 'e-title', detail: 'e-detail', author: 'e-author' }[err.field];
     $(target || 'e-form').textContent = err.message;
@@ -1781,6 +1943,13 @@ function showModeNotice() {
       el('a', { href: url, rel: 'noopener', target: '_blank', text: 'GitHub 開一張願望單' }),
       document.createTextNode(',或照 README 自己架一個池子(一行指令,不用資料庫伺服器)。'),
     ]));
+    if (state.sample) {
+      box.appendChild(el('div', { class: 'notice' }, [
+        el('b', { text: '下面是範例願望,不是真的。' }),
+        document.createTextNode(' 這份快照是用專案內建的示範資料產生的('
+          + '許願人都寫「範例」),票數也是編的 —— 所以上面的統計不顯示數字。'),
+      ]));
+    }
     const cta = $('cta');
     cta.replaceChildren(icon('link'), document.createTextNode('到 GitHub 許願'));
     cta.setAttribute('aria-expanded', 'false');
@@ -1815,19 +1984,24 @@ async function boot() {
     // 沒有後端(例如放在 GitHub Pages)→ 退成唯讀,讀同層的 wishes.json。
     state.mode = 'static';
     try {
-      const res = await fetch(CONFIG.staticData, { cache: 'no-cache' });
+      const res = await fetch(API_BASE + CONFIG.staticData,
+                              { cache: 'no-cache', signal: timeoutSignal() });
       const data = await res.json();
+      // 這份快照可能是 --seed 的範例願望(export_static.py 會標 source:"seed")。
+      // 範例資料長得跟真的一模一樣,不講清楚就等於拿虛構的票數當本站戰績。
+      state.sample = data.source === 'seed';
       state.all = (data.wishes || data).map((w, i) => ({
         id: w.id ?? i + 1, title: w.title || '', detail: w.detail || '',
         tags: w.tags || [], author: w.author || '', status: w.status || 'open',
         votes: w.votes || 0, skill_url: w.skill_url || '', note: w.note || '',
         created_at: w.created_at || new Date(0).toISOString(),
       }));
-      renderStats({
+      renderStats(state.sample ? { wishes: null, votes: null, granted: null } : {
         wishes: state.all.length,
         votes: state.all.reduce((n, w) => n + w.votes, 0),
-        granted: state.all.filter((w) => w.status === 'granted'
-                                      || w.status === 'planned').length,
+        // 「已實現」只算真的做出來的(granted)。planned 是「有人接了」,還沒有成品 ——
+        // 兩個混在一起,首頁就會在什麼都還沒交出來的時候顯示「1 已實現」。
+        granted: state.all.filter((w) => w.status === 'granted').length,
       });
       if (data.round) { state.round = data.round; renderRound(); startClock(); }
     } catch (e2) {
@@ -1841,6 +2015,11 @@ async function boot() {
   updateCounts();
   await load(false);
   if (state.mode === 'static') renderTags();
+  // 網址指名了某一則(被分享來的)→ 撈出來釘在最上面再捲過去。
+  if (ENTRY_WISH) {
+    const found = await focusWish(ENTRY_WISH);
+    if (found && ENTRY_SHARED) sharedNotice();
+  }
 }
 
 /* ══ 事件綁定 ═══════════════════════════════════════════════════════════ */

@@ -177,7 +177,8 @@
  "stats": {
   "wishes": 10,
   "votes": 95,
-  "granted": 1
+  "granted": 0,
+  "planned": 1
  },
  "round": {
   "cycle_days": 3,
@@ -189,6 +190,6 @@
   "leader": null,
   "history": []
  },
- "generated_at": "2026-08-17T13:47:14Z",
+ "generated_at": "2026-08-19T03:37:52Z",
  "note": "這是唯讀快照,由 scripts/export_static.py 產生,不要手改。來源:seed"
 }

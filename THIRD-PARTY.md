@@ -20,6 +20,13 @@ MIT 要求保留著作權聲明與授權條款,因此本檔案即為散佈時的
 | 專案 | 授權 | 用途 |
 |---|---|---|
 | [esbuild](https://github.com/evanw/esbuild) | MIT | 打包與壓縮 `src/vendor.js` |
+| [Pillow](https://github.com/python-pillow/Pillow) | MIT-CMU | 畫 `public/og.png` 分享卡(`scripts/make_og.py`)|
+
+Pillow **不在 package.json 裡、也沒有 requirements.txt** —— 它只有在要重畫分享卡
+那張圖的時候才需要(`pip install pillow`)。圖是產物、進了版控,所以跑伺服器、跑測試、
+部署都不需要它;`scripts/make_og.py --check` 只讀 PNG 檔頭,同樣不需要。
+字型用系統內建的(Windows 的 Georgia + 新細明體、Linux 的 DejaVu Serif + Noto Serif CJK),
+沒有把任何字型檔散佈進這個 repo。
 
 ## 評估過但**沒有**採用
 

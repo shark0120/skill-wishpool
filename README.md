@@ -45,14 +45,48 @@ npm install && npm run build     # esbuild 打包 → 內嵌進 public/index.htm
 
 | | |
 |---|---|
-| **一人一票** | 同一個來源對同一個願望只能附議一次(用加鹽雜湊過的 IP 認,不存原始 IP)。 |
+| **一人一票** | 同一個來源對同一個願望只能附議一次(用加鹽雜湊過的 IP 認,不存原始 IP;IPv6 收斂到 /64,見下面的「防濫用」)。 |
 | **每 3 天結算** | 可用 `--cycle-days` 改。倒數是從資料庫裡釘住的起算點推算的,重啟伺服器不會跳。 |
 | **票最高的出線** | 同票時**先許願的贏**。門檻預設 1 票,可用 `--min-votes` 調高。 |
+| **門檻只算別人的票** | 許願的人自動有一票,所以門檻拿總票數比等於沒有門檻(自己許的自己就湊滿了)。這裡數的是**不是許願者本人**投的票 —— `min_votes=1` 的意思是「至少要有一個別人也想要」。排名還是用總票數。 |
 | **出線就離池** | 得標願望狀態轉成 `planned`(有人接了)並自動註記第幾輪、幾票,不會連莊。 |
 | **票會累積** | 沒選上的願望票數不歸零,下一輪繼續比。 |
-| **不用排程** | 過期輪次由下一個進來的請求順手補結算,沒有 cron、沒有背景執行緒。伺服器關機期間的輪次會誠實記成「沒有結算」,不會假裝當時有人得標。 |
+| **「已實現」只算成品** | 首頁那個數字只數 `granted`(東西真的做出來了)。出線的當下是 `planned`(有人接了),**不算** —— 不然結算完的那一秒首頁就會宣稱有一個成品,而其實還沒有。`/api/health` 的 `stats.planned` 另外給在做的數量。 |
+| **不用排程** | 過期輪次由下一個進來的請求順手補結算,沒有 cron、沒有背景執行緒。停機超過 10 輪的那些會誠實記成「沒有結算」,不會假裝當時有人得標。 |
+| **票以截止當時為準** | 結算雖然是過期後第一個請求順手做的,算的卻是**截止時間之前**投的票。沒有這一條,池子沒人來的那幾個小時裡投的票會回頭決定一個早就該結束的輪次。 |
 
 做完的 skill 用管理端把願望標成 `granted` 並填上網址,首頁的「歷屆結果」就會出現「成品 →」連結。
+
+---
+
+## 分享:每一個願望都有自己的網址
+
+這個池子只有一條長大的路:有人把**某一則**貼給別人。所以那件事被當成功能做,不是順便。
+
+| | |
+|---|---|
+| `/w/{id}` | 一則願望的永久網址。伺服器把 `<title>` 與 `og:` 換成那一則 —— 貼進 LINE、Threads、X、Discord,對方看到的是那個願望,不是千篇一律的首頁。 |
+| 分享鍵 | 每張願望卡上都有。手機叫系統分享面板,桌機直接複製連結。剛許完願的那一刻,只要那張卡在畫面上,游標就會自動停在它上面。 |
+| 點進來 | 那一則被撈出來釘在最上面(它可能早就沉到第二頁),並且明講「有人把這個願望分享給你」。 |
+| 找不到 / 已下架 | 回 404 給爬蟲,但人看到的還是整個池子,不是一頁錯誤訊息。 |
+| 靜態託管 | 沒有 `/w/{id}` 這條路由,分享鍵自動退回同一頁的 `#w{id}` 錨點。 |
+| `/sitemap.xml` | 動態產生:首頁 + 每一個公開願望,`lastmod` 跟著願望的更新時間。 |
+
+網址**不寫死**:`og:url` / `canonical` / `og:image` / sitemap 都用這台伺服器自己的來源
+(`Host` 標頭,可用 `WISHPOOL_SITE_URL` 釘死),所以 clone 去跑 `server.py` 不會指回 skill-tw.com。
+**但唯讀靜態託管沒有伺服器可以改寫**:GitHub Pages 上看到的是版控裡那份預設值(指向
+skill-tw.com 的 canonical 與 og:image),`public/robots.txt` 裡的 sitemap 網址也是寫死的 ——
+要自架唯讀版,先把 `server.py` 的 `SITE_URL_DEFAULT` 改成你的網域、跑一次
+`python3 scripts/sync_meta.py`,再改 `public/robots.txt` 與 `public/sitemap.xml`
+裡寫死的那兩個網址(完整版的 sitemap 是伺服器動態產生的,不吃這個檔)。
+分享卡圖上那行 `skill-tw.com` 也是畫進去的,要換得改 `scripts/make_og.py` 的 `FOOT` 重畫。
+
+分享卡的圖是 `public/og.png`(1200×630),產生器在 `scripts/make_og.py` —— 它是產物,
+進了版控,只有要重畫才需要 `pip install pillow`(伺服器不需要)。
+
+文案的唯一來源是 `server.py` 的 `meta_block()`;`public/index.html` 裡那一段是給靜態託管
+看的預設值,由 `scripts/sync_meta.py` 寫回去,`--check` 在測試裡逐位元組比對 —— 兩邊脫節
+就變紅,不會出現「線上一套、GitHub Pages 另一套」。
 
 ---
 
@@ -73,7 +107,8 @@ python3 server.py --host 127.0.0.1 --port 8787 --db /var/lib/skill-wishpool/wish
 python3 scripts/export_static.py        # 產生 public/wishes.json
 ```
 
-把 `public/` 丟上去就好。前端偵測不到後端時會**自動退成唯讀**:
+把 `public/` 丟上去就好(**先換掉分享卡裡的網址** —— 見上面那一節:靜態託管沒有
+伺服器可以改寫 `canonical` / `og:`,不換的話你的頁面會宣告自己是 skill-tw.com 的複本)。前端偵測不到後端時會**自動退成唯讀**:
 只能看,許願按鈕改成導去 GitHub 開 issue。倒數不會亂編一個假的出來。
 
 ---
@@ -119,11 +154,13 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 | `WISHPOOL_SALT_FILE` | `<db 同層>/ip_salt` | IP 雜湊的鹽。**不要進版控**;換掉就等於把舊的關聯全斷掉 |
 | `WISHPOOL_RATE_WISH_MAX` / `_WINDOW` | `5` / `3600` | 每個來源每小時可許幾個願 |
 | `WISHPOOL_RATE_VOTE_MAX` / `_WINDOW` | `60` / `3600` | 每個來源每小時可附議幾次 |
+| `WISHPOOL_RATE_READ_MAX` | `240` | 每個來源**每分鐘**可讀幾次(API、`/w/{id}`、`/sitemap.xml` 共用一條;正常瀏覽一頁只用 3 次)。這條存在記憶體裡,重啟歸零 |
 | `WISHPOOL_CYCLE_DAYS` | `3` | 幾天結算一次(也可用 `--cycle-days`) |
 | `WISHPOOL_MIN_VOTES` | `1` | 出線門檻 |
 | `WISHPOOL_POW` | `1` | `0` = 關掉送出前的工作量證明 |
 | `WISHPOOL_POW_BITS_WISH` / `_VOTE` | `16` / `13` | 難度(0 bit 的個數)。每 +1 就是兩倍工作量 |
-| `WISHPOOL_POW_TTL` | `300` | 挑戰有效秒數 |
+| `WISHPOOL_POW_TTL` | `180` | 挑戰有效秒數 |
+| `WISHPOOL_SITE_URL` | 未設 | 對外網址(分享卡 `og:`、`canonical`、sitemap 用)。沒設就從每個請求的 `Host` 推,所以**自架通常不用設**;代理沒傳 `Host` 或要強制 https 才設 |
 | `WISHPOOL_CSP` | `hash` | `hash` 用即時算的 inline 雜湊(最嚴);`unsafe-inline` 是**放在會改寫 HTML 的 CDN 後面時的退路**;`off` 完全不發。填錯的值會退回 `hash`,不會變成沒有 CSP |
 
 ---
@@ -137,11 +174,17 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 - **送出前的工作量證明**:許願與附議都要先在瀏覽器算一段雜湊
   (`sha256(salt:nonce)` 開頭要有 N 個 0 bit,預設許願 16 bits ≈ 6.5 萬次、
   附議 13 bits ≈ 8 千次)。人類等幾十毫秒到半秒,腳本要洗版就得付出等比例 CPU。
-  挑戰由伺服器用 HMAC 簽章、綁來源雜湊、5 分鐘過期、**同一份只能兌現一次**
+  挑戰由伺服器用 HMAC 簽章、綁來源雜湊、3 分鐘過期、**同一份只能兌現一次**
   (防重放),而且難度是伺服器說了算 —— 自己把 `bits` 改小會被擋。
   不需要金鑰、不載入任何外部腳本、不放 cookie。`WISHPOOL_POW=0` 可關掉。
-- **速率限制**:每個來源每小時 5 個願望 / 60 次附議,存在 SQLite 裡,重啟不會歸零。這是唯一真正擋得住洗版的機制。檢查與寫入在同一個 `BEGIN IMMEDIATE` 交易裡,所以平行請求繞不過去(自我測試會打 20 個並行請求,只能有 5 個成功)。
+- **速率限制**:每個來源每小時 5 個願望 / 60 次附議,存在 SQLite 裡,重啟不會歸零。
+  讀取另外有一條(每分鐘 240 次,記憶體裡),API 與會查資料庫的頁面(`/w/{id}`、`/sitemap.xml`)共用 ——
+  站在 Cloudflare 後面又關掉 Browser Integrity Check 的話,那就是唯一擋狂打的東西。這是唯一真正擋得住洗版的機制。檢查與寫入在同一個 `BEGIN IMMEDIATE` 交易裡,所以平行請求繞不過去(自我測試會打 20 個並行請求,只能有 5 個成功)。
 - **一人一票**:`(願望, 來源雜湊)` 有唯一鍵,重複附議在資料庫層就被吃掉,不只是前端 disable。
+- **IPv6 收斂到 /64**:來源雜湊算的是 /64 而不是完整位址。ISP 與 VPS 配 IPv6 是一次給一整段 /64,
+  用完整位址當來源的話,任何有 IPv6 的人手上就有 1.8×10^19 個「不同來源」—— 速率限制與一人一票
+  對他等於不存在,而且不必偽造任何標頭。代價是同一段 /64 底下的人共用一票(跟 IPv4 的 NAT 同一類,
+  但那是**有界**的取捨;用完整位址是無界的)。
 - **不存原始 IP**:只存 `sha256(鹽 + IP)` 前 32 碼。連 access log 也只寫雜湊前 8 碼。自我測試會直接打開 DB 檔翻每一格,確認裡面找不到 IP 字串。
 - **重複願望自動合併**:標題正規化(去標點空白、casefold)後撞到就併成附議,池子不會被同一件事佔滿。
 - **輸入清理**:零寬字元、雙向覆寫字元、控制字元一律移除;長度、連結數量、標籤數量都有硬上限。
@@ -155,7 +198,7 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 
 **沒做,你要自己知道:**
 
-- **沒有帳號系統**。同一個 NAT / 校園網路 / 公司網路底下的人會共用一個雜湊,彼此擠不掉彼此的票,但也就只有一票。想要嚴格一人一票就得加登入,這個專案刻意不做。
+- **沒有帳號系統**。同一個 NAT / 校園網路 / 公司網路底下的人會共用一個雜湊(IPv6 則是同一段 /64,通常就是同一戶),彼此擠不掉彼此的票,但也就只有一票。想要嚴格一人一票就得加登入,這個專案刻意不做。
 - **前端的蜜罐欄位只是嚇阻**,不是防護。真正的防線是速率限制。
 - **PoW 不等於「人機驗證」**。它證明的是「有人付了計算成本」,不是「這是人類」。
   買得起 CPU 的人還是過得去 —— 它讓大量自動化變貴,真正擋量的是速率限制。
@@ -170,12 +213,12 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 ## 測試
 
 ```bash
-python3 scripts/selftest.py                 # 117 項端到端檢查(真的起伺服器、真的打 HTTP)
+python3 scripts/selftest.py                 # 203 項端到端檢查(真的起伺服器、真的打 HTTP)
 python3 scripts/selftest.py --verify-gauge  # 反向對照:把防護拆掉,確認測試會紅
 python3 scripts/check_contrast.py -v        # 直接從 index.html 讀色票,實算 WCAG 對比度
 ```
 
-`--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、速率限制的寫入鎖、工作量證明的雜湊檢查、工作量證明的防重放、輪次得標判定**這八個防護改壞,然後要求同一套測試**必須失敗**。
+`--verify-gauge` 是重點:它會複製一份原始碼,分別把**標題長度上限、投票去重、目錄逃脫檢查、速率限制、速率限制的寫入鎖、工作量證明的雜湊檢查、工作量證明的防重放、讀取限流、輪次得標判定、分享卡的跳脫、IPv6 來源收斂、截止時間、已實現的算法、門檻只算別人的票**這十四個防護改壞,然後要求同一套測試**必須失敗**。
 一套永遠會綠的測試比沒有測試更危險 —— 這一步就是在防那個。
 
 **測試一定要在你要部署的那台機器上跑一次。** 這個專案就吃過一次:同一份程式碼在
@@ -183,7 +226,7 @@ Windows / Python 3.14 上 94 項全綠,在 Ubuntu / Python 3.10 上穩定紅 4 �
 那個是真 bug(見下面第三點)。`deploy/README.md` 的更新流程因此把 selftest 放在
 `systemctl restart` **之前**。
 
-開發過程中這套機制真的抓到四件事:
+開發過程中這套機制真的抓到五件事:
 
 > **假綠燈:** 目錄逃脫測試原本用 `urllib` 發 `/../x`,但 `urllib` 會先把路徑正規化成
 > `/x`,所以那條測試從來沒送出過 `..` —— 把逃脫檢查整段拆掉,測試照樣全綠。現在改用
@@ -203,13 +246,23 @@ Windows / Python 3.14 上 94 項全綠,在 Ubuntu / Python 3.10 上穩定紅 4 �
 >
 > **會閃的測試:** 輪次測試原本 sleep 固定秒數。會閃的測試跟假綠燈一樣糟 —— CI 隨機
 > 變紅之後,大家就開始忽略紅燈。現在改成先確認票真的投進去了,再輪詢等結算。
+>
+> **會閃的「尺」:** 更難發現的一種 —— 測試本身不閃,**反向對照**在閃。並行洗版那一節
+> 原本是開 20 個 thread 各自送請求,但 `t.start()` 自己就要時間,第一個常常整趟跑完了
+> 第 20 個才起步,於是「拿掉寫入鎖」這個變異三次只有一次會紅(head 與新版都會閃,
+> 實測過)。一把時準時不準的尺,量出來的綠燈是沒有意義的。現在 20 條連線先各自建好、
+> 卡在 barrier 再一起送,而且**同樣的爆量打 6 輪**(每輪換一個來源位址讓配額重來)——
+> 每一輪都必須剛好 5 個成功。拆掉鎖之後 6 次重跑全部如預期變紅。
 
 ---
 
 ## 介面
 
 - **手機優先。** 實測過 375×812 與 768×1024、亮色與暗色各一次:沒有橫向捲動、
-  最小字級 12.5px、文字對比最低 4.82:1(WCAG AA 要 4.5)、獨立點擊目標都 ≥ 44px。
+  最小字級 12.5px、文字對比最低 5.17:1(WCAG AA 要 4.5)、獨立點擊目標都 ≥ 44px。
+- **每張卡有分享鍵**(44px 高,顏色刻意比附議鈕弱 —— 附議才是主行動)。手機叫系統
+  分享面板、桌機複製連結;沒有 `navigator.clipboard`(http 或舊瀏覽器)時退回老方法,
+  再不行就直接把網址顯示出來讓人自己抄。
 - **沒有 emoji。** 圖示是同文件內嵌的 SVG symbol —— emoji 在每個平台長得不一樣、
   在暗色模式常常糊掉,而且大小不受控。
 - **水池是 canvas 畫的**,不是圖檔:水面波紋一直在動,有人許願或附議時會落一滴水
@@ -230,7 +283,9 @@ Windows / Python 3.14 上 94 項全綠,在 Ubuntu / Python 3.10 上穩定紅 4 �
 ## 想改成別的主題?
 
 這份程式碼裡沒有任何跟「skill」綁死的邏輯 —— 它就是一個**聯署 + 定期結算**的池子。
-把 `public/index.html` 的文案換掉就能變成功能許願、選書、選題、社團活動投票。
+把 `public/index.html` 的文案換掉就能變成功能許願、選書、選題、社團活動投票
+(分享卡的文案在 `server.py` 的 `meta_block()`,改完跑 `python3 scripts/sync_meta.py`;
+分享卡的圖在 `scripts/make_og.py`)。
 後端只有兩個地方要看:`CYCLE_DAYS_DEFAULT`(幾天結算)與 `pick_winner()`(怎麼算贏)。
 
 ---
@@ -263,19 +318,38 @@ HTML really is the output of `src/vendor.js`. See [THIRD-PARTY.md](THIRD-PARTY.m
 python3 server.py --seed     # http://127.0.0.1:8787
 ```
 
+- **Shareable wishes**: every wish has its own URL, `/w/{id}`, and the server rewrites
+  `<title>` and the Open Graph tags to that wish, so pasting it into LINE / Threads / X /
+  Discord shows *that wish* rather than the same generic homepage. Every card has a share
+  button (native share sheet on mobile, clipboard on desktop). `/sitemap.xml` is generated
+  from the live pool. URLs are not hard-coded **when you run `server.py`** — they follow
+  the request's `Host`, or `WISHPOOL_SITE_URL` if you pin it. Static hosting has no server
+  to rewrite them, so the committed defaults (canonical, `og:image`, `robots.txt`,
+  `sitemap.xml`) still point at skill-tw.com — change `SITE_URL_DEFAULT`, run
+  `scripts/sync_meta.py`, and edit those two files before you publish a read-only copy.
 - **Read-only static mode**: run `python3 scripts/export_static.py` and host `public/`
-  anywhere (GitHub Pages). The page detects the missing backend and degrades to read-only.
+  anywhere (GitHub Pages). The page detects the missing backend and degrades to read-only;
+  if the snapshot is the bundled sample data it says so instead of passing fictional vote
+  counts off as real.
 - **Anti-abuse**: per-source rate limits in SQLite, one vote per source per wish enforced by
   a DB unique key, duplicate-title merging, input sanitisation, hash-based CSP, fail-closed
   admin endpoints. Raw IPs are never stored — only `sha256(salt + ip)`.
-- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (117 checks).
-  `--verify-gauge` sabotages eight guards and requires the suite to go red, so the suite
+- **Tests**: `scripts/selftest.py` boots the real server over real HTTP (203 checks).
+  `--verify-gauge` sabotages fourteen guards and requires the suite to go red, so the suite
   can't quietly become a rubber stamp. It has already caught a false green (a traversal
   test that never actually sent `..`, because `urllib` normalises the path), two real bugs
   (the rate limiter was check-then-act with no lock, so 20 parallel requests all got
   through a limit of 5; and responses were sent before the transaction committed, so a
-  freshly created wish could be missing from the very next read), and a flaky test.
+  freshly created wish could be missing from the very next read), a flaky test — and a
+  flaky *gauge*: the parallel-flood check started 20 threads one by one, so the first
+  request often finished before the last one started and the "remove the write lock"
+  mutation only went red about one run in three. The connections are now opened up front
+  and released together by a barrier, and the same flood runs six times.
   Run the suite **on the machine you deploy to** — the same code was 94/94 green on
   Windows/Python 3.14 while failing 4 checks on Ubuntu/Python 3.10.
+- **One person, one vote — including over IPv6**: the source hash is computed from the /64
+  prefix, not the full address. ISPs hand out a whole /64 per customer, so hashing the full
+  address would give anyone with IPv6 1.8×10^19 distinct "sources" and no header forgery
+  required.
 
 See the tables above for the full API and configuration; MIT licensed.

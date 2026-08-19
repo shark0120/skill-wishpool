@@ -65,7 +65,10 @@ def from_seed(seed_path):
         "stats": {
             "wishes": len(wishes),
             "votes": sum(w["votes"] for w in wishes),
-            "granted": sum(1 for w in wishes if w["status"] in ("granted", "planned")),
+            # 「已實現」只算真的做出來的,planned 是「有人接了」—— 跟 server.stats()
+            # 同一條規矩,不然靜態快照會比線上多報一個不存在的成品。
+            "granted": sum(1 for w in wishes if w["status"] == "granted"),
+            "planned": sum(1 for w in wishes if w["status"] == "planned"),
         },
         # 種子資料沒有真的輪次,所以倒數留空 —— 不要編一個假的結算時間出來。
         "round": {

@@ -131,7 +131,13 @@ cd /opt/skill-wishpool && sudo git pull
 sudo -u wishpool python3 scripts/selftest.py      # 先在這台機器上驗過再重啟
 sudo systemctl restart skill-wishpool
 curl -s http://127.0.0.1:8787/api/health | head -c 200
+curl -s http://127.0.0.1:8787/w/1 | grep -o '<title>[^<]*</title>'   # 分享頁換過標題沒
 ```
+
+**願望的分享網址是 `/w/{id}`,由應用程式產生**(伺服器會把 `<title>` 與 `og:` 換成那一則)。
+所以反向代理必須把**所有**路徑都轉給 Python —— 本目錄兩份設定都已經是 `location /` 全轉。
+如果你自己接了「靜態檔直接從磁碟撈」的規則,`/w/{id}` 會變成 404,分享出去的連結就死了。
+分享卡的圖 `public/og.png` 跟著 repo 一起來,不用另外產生。
 
 ## aaPanel / 寶塔:網站已經在面板裡建好了
 
