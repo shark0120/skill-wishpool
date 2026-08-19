@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import sqlite3
@@ -358,6 +359,35 @@ def suite_core(c, src_root):
         c.ok("有尊重 prefers-reduced-motion",
              "prefers-reduced-motion:reduce" in app.replace(" ", ""),
              "找不到 reduced-motion 區塊")
+
+        # 「做出來的 skill」那一區:站上列的每一個,skills/ 底下都要真的有;
+        # skills/ 底下的每一個,站上都要列到。少一邊就是說謊或白做,兩邊都要紅。
+        # (這是這個站唯一會隨時間長大的清單,沒有量尺盯著它一定會漂。)
+        listed = set(re.findall(r'<li data-skill="([^"]+)"', page))
+        # 例外:住在自己 repo 的那些,skills/ 底下本來就不會有。豁免寫在標記上
+        # (data-repo="own")而不是寫在這支測試裡 —— 這樣豁免看得見,而且它只豁免
+        # 「資料夾要存在」這一條,下面仍然要求它指得出一個外部連結。
+        own = set(re.findall(r'<li data-skill="([^"]+)" data-repo="own"', page))
+        for name in sorted(own):
+            block = re.search(r'<li data-skill="%s" data-repo="own".*?</li>' % re.escape(name),
+                              page, re.S)
+            c.ok("%s 標了自己的 repo,就要真的給得出連結" % name,
+                 bool(block) and 'href="https://' in block.group(0))
+        listed_in_repo = listed - own
+        shipped = set()
+        skills_dir = os.path.join(src_root, "skills")
+        if os.path.isdir(skills_dir):
+            shipped = {n for n in os.listdir(skills_dir)
+                       if os.path.isfile(os.path.join(skills_dir, n, "SKILL.md"))}
+        c.ok("站上列的 skill 都真的在 repo 裡", not (listed_in_repo - shipped),
+             "站上有但 skills/ 沒有:%s" % sorted(listed_in_repo - shipped))
+        c.ok("repo 裡的 skill 都有列在站上", not (shipped - listed),
+             "skills/ 有但站上沒列:%s" % sorted(shipped - listed))
+        c.ok("展示區至少有 10 個 skill", len(listed) >= 10, "只有 %d 個" % len(listed))
+        # 每一項都要有一句說明,不能只丟一個名字
+        blocks = re.findall(r'<li data-skill="[^"]+".*?</li>', page, re.S)
+        thin = [b[:40] for b in blocks if '<p class="made-desc">' not in b]
+        c.ok("每個 skill 都有一句說明", not thin, repr(thin[:3]))
 
         # 反向對照的錨點必須唯一 —— 這條放在**快測**裡而不是只靠 --verify-gauge,
         # 因為那支要跑十幾分鐘。實際踩過:為 /w/{id} 與 /sitemap.xml 各加了一行

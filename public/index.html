@@ -358,6 +358,33 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
 .tags-bar button:hover{filter:brightness(.96)}
 .tags-bar button[aria-pressed=true]{box-shadow:inset 0 0 0 2px currentColor}
 
+/* ══ 做出來的 skill ════════════════════════════════════════════════════
+   會一直長,所以版面要能吃下數量:分類小標 + 一行式項目,不是每個都給一張
+   大卡。名稱等寬、說明一行,掃過去就知道有沒有自己要的。每組標題右邊帶數字,
+   人才知道這一類有多少、需不需要往下看。                                */
+.made{margin:1.4rem 0 0;padding:1.2rem 1rem;background:var(--card);
+      border:var(--hair) solid var(--rule);border-radius:.8rem;box-shadow:var(--shadow)}
+.made h2{font-size:.74rem;letter-spacing:.22em;text-transform:uppercase;
+         color:var(--c-flare);font-weight:700}
+.made-lead{font-size:.88rem;color:var(--soft);margin:.4rem 0 0;line-height:1.75}
+.made-group{margin:1.1rem 0 0;padding:.8rem 0 0;border-top:var(--hair) solid var(--rule)}
+.made-group h3{display:flex;align-items:baseline;gap:.55rem;flex-wrap:wrap;
+               font-family:var(--font-display);font-size:1rem;font-weight:600}
+.grp-name{color:var(--ink);letter-spacing:.06em}
+.grp-desc{font-size:.82rem;color:var(--faint);font-weight:400;flex:1 1 auto}
+.grp-n{font-size:.78rem;color:var(--faint);font-variant-numeric:tabular-nums;
+       border:var(--hair) solid var(--rule);border-radius:1rem;padding:.05rem .5rem}
+.made-list{list-style:none;margin:.35rem 0 0}
+.made-list li{padding:.45rem 0;border-top:var(--hair) dashed var(--rule)}
+.made-list li:first-child{border-top:none}
+.made-name{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+           font-size:.92rem;font-weight:600;display:inline-flex;align-items:center;
+           min-height:44px;text-decoration:none}
+.made-name:hover{text-decoration:underline}
+.made-own{font-size:.72rem;color:var(--faint);margin-left:.5rem;border:var(--hair) solid var(--rule);
+          border-radius:1rem;padding:.05rem .45rem;vertical-align:.1em}
+.made-desc{font-size:.88rem;color:var(--soft);margin:-.5rem 0 0;line-height:1.75}
+.gal-jump{margin-left:.35rem;font-weight:600;white-space:nowrap}
 /* ══ 這個池子怎麼運作 ══════════════════════════════════════════════════
    四條規則,不是裝飾。用 dl 是因為它本來就是「詞條 + 解釋」;dt 靠左固定
    寬度,窄螢幕(<26rem)改成上下堆疊,不然中文詞條會被擠成一字一行。     */
@@ -745,43 +772,12 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
 
   <div class="main">
 
-  <!-- 成品展示:願望做出來之後長什麼樣、放在哪。這是這個池子的交付證明。 -->
+  <!-- 成品展示只在這裡留一行指路:證明這個池子真的會交東西,但不要把願望擠下去。
+       完整清單在頁面下方 #made,分類放在那裡才長得大。 -->
   <section class="gallery" aria-labelledby="gal-h">
-    <div class="gallery-head">
-      <p class="gallery-label" id="gal-h">成品長這樣</p>
-      <p class="gal-lead">這兩個不是示範,是每天在用的東西。池子裡出線的願望,
-        做出來也是放在同一個地方、同一種用法 —— 整包丟進資料夾就能用。</p>
-      <a class="gallery-all" href="https://github.com/shark0120/skill-wishpool/tree/main/skills"
-         target="_blank" rel="noopener noreferrer">全部成品<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
-    </div>
-    <article class="gal-item">
-      <h3 class="gal-name">/dick-one-more<span class="gal-alias">屌一點</span></h3>
-      <p class="gal-desc">你看得出東西很普通,但講不出要改哪裡。跟它說「屌一點」,
-        它不反問,直接挑最有感的地方升級,做完再教你一個下次能直接用的詞。</p>
-      <div class="gal-links">
-        <a class="btn" href="https://github.com/shark0120/dick-one-more"
-           target="_blank" rel="noopener noreferrer">看 GitHub<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
-        <span class="meta">這一個有自己的 repo</span>
-      </div>
-    </article>
-    <article class="gal-item">
-      <h3 class="gal-name">/ai</h3>
-      <p class="gal-desc">給它一個小時數,它排出時程與任務密度、平行偵查、大量產出,
-        每幾輪把進度壓縮寫進持久狀態 —— 換一個對話還能接著跑。</p>
-      <div class="gal-links">
-        <a class="btn" href="https://github.com/shark0120/skill-wishpool/blob/main/skills/ai/SKILL.md"
-           target="_blank" rel="noopener noreferrer">讀 SKILL.md<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
-      </div>
-    </article>
-
-    <div class="gal-install">
-      <p class="gal-install-label">兩邊都能用</p>
-      <p class="gal-install-body">把整個資料夾放進去就好,不用安裝、不用註冊。</p>
-      <div class="gal-paths">
-        <span class="gal-path"><b>Claude Code</b><code>~/.claude/skills/</code></span>
-        <span class="gal-path"><b>Codex</b><code>~/.codex/skills/</code></span>
-      </div>
-    </div>
+    <p class="gallery-label" id="gal-h">做出來的 skill</p>
+    <p class="gal-lead">目前 <b>14</b> 個,免費、開源、Claude Code 與 Codex 都能用。
+      池子出線的願望做出來也是放在同一個地方。<a class="gal-jump" href="#made">看全部</a></p>
   </section>
 
   <section class="toolbar" aria-label="篩選與排序">
@@ -815,6 +811,75 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
   <button id="load-more" type="button" hidden>載入更多</button>
   </div><!-- /main -->
   </div><!-- /shell -->
+
+  <!-- 做出來的 skill:分五類,每一項都對得上 skills/ 底下真的存在的資料夾
+       (selftest 有一條雙向比對盯著,站上寫了 repo 卻沒有、或反過來,都會紅)。 -->
+  <section class="made" id="made" aria-labelledby="made-h">
+    <h2 id="made-h">做出來的 skill</h2>
+    <p class="made-lead">整包丟進資料夾就能用,不用安裝、不用註冊。每一個都是真的在用的東西,不是示範。</p>
+    <section class="made-group" aria-labelledby="grp-ship">
+      <h3 id="grp-ship"><span class="grp-name">上線</span><span class="grp-desc">把東西安全送上線</span><span class="grp-n">3</span></h3>
+      <ul class="made-list">
+        <li data-skill="aapanel-safe-deploy"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/aapanel-safe-deploy" target="_blank" rel="noopener noreferrer">/aapanel-safe-deploy</a>
+          <p class="made-desc">主機上已經跑著別人的站,要加新服務。它先數埠、走反向代理加法,不讓現有網站一起下線,附十秒回滾。</p></li>
+        <li data-skill="publish-gate"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/publish-gate" target="_blank" rel="noopener noreferrer">/publish-gate</a>
+          <p class="made-desc">要開源或公開發佈之前,先跑洩密、資安、誠實性、介面四道唯讀稽核,任一項 critical 就擋下來。</p></li>
+        <li data-skill="line-ending-integrity"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/line-ending-integrity" target="_blank" rel="noopener noreferrer">/line-ending-integrity</a>
+          <p class="made-desc">腳本上到 Linux 說 bad interpreter、雜湊永遠對不上。它查行尾,再用 .gitattributes 釘死。</p></li>
+      </ul>
+    </section>
+    <section class="made-group" aria-labelledby="grp-verify">
+      <h3 id="grp-verify"><span class="grp-name">驗證</span><span class="grp-desc">證明它真的會動</span><span class="grp-n">4</span></h3>
+      <ul class="made-list">
+        <li data-skill="false-green-audit"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/false-green-audit" target="_blank" rel="noopener noreferrer">/false-green-audit</a>
+          <p class="made-desc">測試都綠、上線就掛。逐條查是不是測到別份設定、輸出被吞掉、或斷言永遠為真。</p></li>
+        <li data-skill="repo-server-drift-audit"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/repo-server-drift-audit" target="_blank" rel="noopener noreferrer">/repo-server-drift-audit</a>
+          <p class="made-desc">本機要蓋上線上之前,先比對雙邊 md5 分四類,揪出線上比較新的檔,避免靜默覆蓋別人的修改。</p></li>
+        <li data-skill="adversarial-fix-loop"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/adversarial-fix-loop" target="_blank" rel="noopener noreferrer">/adversarial-fix-loop</a>
+          <p class="made-desc">修完 critical 不確定真的修好。強制修的人跟驗的人分開,再把缺陷植回去確認測試真的會紅。</p></li>
+        <li data-skill="claim-code-parity"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/claim-code-parity" target="_blank" rel="noopener noreferrer">/claim-code-parity</a>
+          <p class="made-desc">懷疑 README 或安裝說明跟程式做的不一樣。逐句建對照表實測,沒有對應程式碼的句子就刪掉。</p></li>
+      </ul>
+    </section>
+    <section class="made-group" aria-labelledby="grp-agent">
+      <h3 id="grp-agent"><span class="grp-name">代理</span><span class="grp-desc">讓它自己跑一段</span><span class="grp-n">3</span></h3>
+      <ul class="made-list">
+        <li data-skill="ai"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/ai" target="_blank" rel="noopener noreferrer">/ai</a>
+          <p class="made-desc">給它一個小時數,它排出時程與任務密度、平行偵查、大量產出,每幾輪把進度壓縮寫進持久狀態 —— 換一個對話還能接著跑。</p></li>
+        <li data-skill="autopilot"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/autopilot" target="_blank" rel="noopener noreferrer">/autopilot</a>
+          <p class="made-desc">掛著讓它把專案做完。開跑先偵測這個專案的設定,認領不會互撞的任務,自檢綠了才提交。</p></li>
+        <li data-skill="execute-better"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/execute-better" target="_blank" rel="noopener noreferrer">/execute-better</a>
+          <p class="made-desc">你丟一句模糊的多步任務。它先收成執行簡報、控好範圍再動手,最後逐條標驗收是過、是紅、還是根本沒跑。</p></li>
+      </ul>
+    </section>
+    <section class="made-group" aria-labelledby="grp-ops">
+      <h3 id="grp-ops"><span class="grp-name">維運</span><span class="grp-desc">日常維運</span><span class="grp-n">3</span></h3>
+      <ul class="made-list">
+        <li data-skill="claude-code-custom-model"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/claude-code-custom-model" target="_blank" rel="noopener noreferrer">/claude-code-custom-model</a>
+          <p class="made-desc">把 Claude Code 接到自訂模型之後,上下文卡在 200K、串流一直 400。給隔離設定與五步二分診斷。</p></li>
+        <li data-skill="quiet-remote-ops"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/quiet-remote-ops" target="_blank" rel="noopener noreferrer">/quiet-remote-ops</a>
+          <p class="made-desc">要遠端動一台別人正在用的 Windows。用排程與無頭瀏覽器做事,不彈視窗、不搶焦點、不動對方的設定檔。</p></li>
+        <li data-skill="antigravity-account-recover"><a class="made-name" href="https://github.com/shark0120/skill-wishpool/tree/main/skills/antigravity-account-recover" target="_blank" rel="noopener noreferrer">/antigravity-account-recover</a>
+          <p class="made-desc">Gemini 帳號跳 403 要你驗證,重新登入沒用。教你從上游錯誤裡把那個一次性驗證連結挖出來。</p></li>
+      </ul>
+    </section>
+    <section class="made-group" aria-labelledby="grp-craft">
+      <h3 id="grp-craft"><span class="grp-name">手感</span><span class="grp-desc">做東西的手感</span><span class="grp-n">1</span></h3>
+      <ul class="made-list">
+        <li data-skill="dick-one-more" data-repo="own"><a class="made-name" href="https://github.com/shark0120/dick-one-more" target="_blank" rel="noopener noreferrer">/dick-one-more</a><span class="made-own">自己的 repo</span>
+          <p class="made-desc">你只說得出「屌一點」,卻講不清哪裡差。它挑最弱的幾處直接改,做完再教你一個下次能直接講的詞。</p></li>
+      </ul>
+    </section>
+    <div class="gal-install">
+      <p class="gal-install-label">怎麼裝</p>
+      <p class="gal-install-body">下載那個資料夾,整包放進去,重開對話就會認得。</p>
+      <div class="gal-paths">
+        <span class="gal-path"><b>Claude Code</b><code>~/.claude/skills/</code></span>
+        <span class="gal-path"><b>Codex</b><code>~/.codex/skills/</code></span>
+      </div>
+    </div>
+  </section>
+
 
   <!-- 規則寫在頁面上,不是寫在 README 裡:誰做、多久、要幾票、沒出線/做不出來會怎樣。
        位置刻意放在列表後面 —— 首屏要先給池子,想知道規矩的人自然會捲到這裡。

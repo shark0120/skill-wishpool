@@ -1,0 +1,15 @@
+{
+  "_comment": "放在專案根,檔名 .autopilot.json。存在時凌駕自動偵測;換 repo 只改這一檔。省略的欄位回退到偵測。",
+  "claimCli": "node coordination/claim.mjs",
+  "board": "coordination/tasks.json",
+  "loopState": "coordination/loop-state.json",
+  "planDoc": "docs/plan/00-MASTER_PLAN_TO_LAUNCH.md",
+  "stateDoc": "CURRENT_STATE.md",
+  "handoffDoc": "CODEX_HANDOFF.md",
+  "taskDir": "coordination/WORK_PACKAGES",
+  "commitTrailer": "Co-Authored-By: Your Name <noreply@example.com>",
+  "frontendViewport": "375x812",
+  "sharedFiles": ["src/App.tsx", "src/main.ts"],
+  "gateAliases": { "static": "npm run verify", "tc": "npm run typecheck" },
+  "healthMin": 3
+}

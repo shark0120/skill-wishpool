@@ -1,0 +1,7 @@
+{
+  "schema": "portable-coord/v1",
+  "note": "認領=鎖住不重疊檔案範圍,先到先得。gate 用 @alias,由 project-profile 的偵測指令解析;別名對空字串=略過該 gate。",
+  "gateAliases": { "@install": "", "@build": "", "@test": "", "@lint": "", "@typecheck": "" },
+  "sharedFiles": [],
+  "tasks": []
+}
