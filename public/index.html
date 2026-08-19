@@ -675,24 +675,6 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     </div>
   </header>
 
-  <!-- 規則寫在頁面上,不是寫在 README 裡。第一次來的人只想知道四件事:
-       誰做、多久、要幾票、做不出來會怎樣 —— 講不清楚,願望就不會有人許。
-       每一條都要對得上程式碼(門檻是 pick_winner 只算別人的票、3 天是
-       cycle_days),寫不出證據的承諾一句都不要放。 -->
-  <section class="how" aria-labelledby="how-h">
-    <h2 id="how-h">這個池子怎麼運作</h2>
-    <dl class="how-list">
-      <div><dt>誰做</dt><dd>我做。出線的願望我親手做成 skill,放上 GitHub,免費、開源、
-        Claude Code 與 Codex 都能用 —— 下面「成品長這樣」那兩個就是這樣來的。</dd></div>
-      <div><dt>多久</dt><dd>每 3 天結算一次。倒數就在上面那一格,不是喊爽的。</dd></div>
-      <div><dt>要幾票</dt><dd>門檻只算<b>別人的票</b>。許願的人自動有一票,但那票不算數 ——
-        至少要有一個別人也說「我也要」,才有資格出線。</dd></div>
-      <div><dt>沒出線呢</dt><dd>票會留著,下一輪繼續比 —— 不歸零。而且沒出線不等於沒人做:
-        想法夠好的我也會挑來做,只是<b>只有出線的那一個是我保證會做的</b>。</dd></div>
-      <div><dt>做不出來呢</dt><dd>就在那個願望底下寫清楚為什麼(狀態改成「暫不做」)。
-        不會裝作沒看見,也不會把做不到的東西說成做得到。</dd></div>
-    </dl>
-  </section>
 
   <!-- 手機是單純的直向流,桌機才會變成「釘住的側欄 + 主欄」。
        DOM 順序刻意維持成手機的閱讀順序,所以鍵盤與螢幕閱讀器的順序在兩邊都對。 -->
@@ -833,6 +815,25 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
   <button id="load-more" type="button" hidden>載入更多</button>
   </div><!-- /main -->
   </div><!-- /shell -->
+
+  <!-- 規則寫在頁面上,不是寫在 README 裡:誰做、多久、要幾票、沒出線/做不出來會怎樣。
+       位置刻意放在列表後面 —— 首屏要先給池子,想知道規矩的人自然會捲到這裡。
+       每一條都要對得上程式碼(門檻是 pick_winner 只算別人的票、3 天是
+       cycle_days),寫不出證據的承諾一句都不要放。 -->
+  <section class="how" aria-labelledby="how-h">
+    <h2 id="how-h">這個池子怎麼運作</h2>
+    <dl class="how-list">
+      <div><dt>誰做</dt><dd>我做。出線的願望我親手做成 skill,放上 GitHub,免費、開源、
+        Claude Code 與 Codex 都能用 —— 站上「成品長這樣」那兩個就是這樣來的。</dd></div>
+      <div><dt>多久</dt><dd>每 3 天結算一次。倒數就在上面那一格,不是喊爽的。</dd></div>
+      <div><dt>要幾票</dt><dd>門檻只算<b>別人的票</b>。許願的人自動有一票,但那票不算數 ——
+        至少要有一個別人也說「我也要」,才有資格出線。</dd></div>
+      <div><dt>沒出線呢</dt><dd>票會留著,下一輪繼續比 —— 不歸零。而且沒出線不等於沒人做:
+        想法夠好的我也會挑來做,只是<b>只有出線的那一個是我保證會做的</b>。</dd></div>
+      <div><dt>做不出來呢</dt><dd>就在那個願望底下寫清楚為什麼(狀態改成「暫不做」)。
+        不會裝作沒看見,也不會把做不到的東西說成做得到。</dd></div>
+    </dl>
+  </section>
 
   <footer>
     <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>・MIT・可以自己架一個。不放 cookie、不追蹤,資料庫不存你的 IP,只存加鹽雜湊用來認一人一票。</p>
