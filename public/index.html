@@ -800,7 +800,8 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
 
   <noscript>
     <div class="notice"><b>要有 JavaScript 才看得到池子裡的願望。</b>
-      這一頁沒有預先產生的內容 —— 願望是即時從這個站的 <code>/api/wishes</code> 讀的
+      願望清單沒有預先產生 —— 是即時從這個站的 <code>/api/wishes</code> 讀的
+      (從分享連結 <code>/w/{id}</code> 進來的話,那一則的標題與說明在頁面標題與 og 裡,伺服器已經填好了)
       (那支 API 不需要金鑰、也開放跨來源讀取)。不想開 JavaScript 的話,可以直接讀那支
       API,或到 <a href="https://github.com/shark0120/skill-wishpool">GitHub</a> 開一張願望單。</div>
   </noscript>
@@ -872,7 +873,10 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     </section>
     <div class="gal-install">
       <p class="gal-install-label">怎麼裝</p>
-      <p class="gal-install-body">下載那個資料夾,整包放進去,重開對話就會認得。</p>
+      <p class="gal-install-body">GitHub 沒辦法單獨下載一個資料夾,整包抓下來再把要的那個複製進去:
+        <code>git clone https://github.com/shark0120/skill-wishpool</code> 之後
+        <code>cp -r skill-wishpool/skills/&lt;名字&gt; ~/.claude/skills/</code>(Codex 換成 <code>~/.codex/skills/</code>)。
+        重開對話就會認得。</p>
       <div class="gal-paths">
         <span class="gal-path"><b>Claude Code</b><code>~/.claude/skills/</code></span>
         <span class="gal-path"><b>Codex</b><code>~/.codex/skills/</code></span>
@@ -889,7 +893,8 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     <h2 id="how-h">這個池子怎麼運作</h2>
     <dl class="how-list">
       <div><dt>誰做</dt><dd>我做。出線的願望我親手做成 skill,放上 GitHub,免費、開源、
-        Claude Code 與 Codex 都能用 —— 站上「成品長這樣」那兩個就是這樣來的。</dd></div>
+        Claude Code 與 Codex 都能用。站上「做出來的 skill」那些是我平常在用、先放上來的;
+        <b>池子出線的第一個還沒產生</b>(第一輪還沒結算),做完會放進同一個地方。</dd></div>
       <div><dt>多久</dt><dd>每 3 天結算一次。倒數就在上面那一格,不是喊爽的。</dd></div>
       <div><dt>要幾票</dt><dd>門檻只算<b>別人的票</b>。許願的人自動有一票,但那票不算數 ——
         至少要有一個別人也說「我也要」,才有資格出線。</dd></div>
@@ -901,7 +906,9 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
   </section>
 
   <footer>
-    <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>・MIT・可以自己架一個。不放 cookie、不追蹤,資料庫不存你的 IP,只存加鹽雜湊用來認一人一票。</p>
+    <p><a id="repo-link" href="https://github.com/shark0120/skill-wishpool">原始碼在 GitHub</a>・MIT・可以自己架一個。不放 cookie、不追蹤,資料庫不存你的 IP,只存加鹽雜湊用來認一人一票。
+      你投過哪些願望、亮暗模式記在你自己的瀏覽器裡(localStorage),不會送到伺服器。
+      站在 Cloudflare 後面,所以連線層的錯誤報告會送到 Cloudflare —— 那一段不是我放的,也不在我手上。</p>
   </footer>
 </div>
 
@@ -1803,7 +1810,9 @@ function renderListEnd(allShown) {
   if (old) old.remove();
   if (!allShown || !state.wishes.length) return;
   const kids = [];
-  if (state.total <= 5 && !state.q && !state.tag) {
+  // 「排在最上面」只有在時間序(熱門/最新)才成立;「最多聯署」排序下是照票數排的,
+  // 新願望 0 票會在最後面 —— 那句話在那個排序下是假的。
+  if (state.total <= 5 && !state.q && !state.tag && state.sort !== 'top') {
     kids.push(document.createTextNode(
       '池子裡目前只有 ' + state.total + ' 個願望 —— 你許的會直接排在最上面。'));
     if (state.mode === 'live' && !state.readonly) {

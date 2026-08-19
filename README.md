@@ -191,6 +191,9 @@ curl -X POST http://127.0.0.1:8787/api/admin/wishes/12 \
 - **XSS**:使用者內容全程走 `textContent`,前端沒有任何 `innerHTML` / `insertAdjacentHTML` / `eval`(自我測試會掃原始碼,加回去就變紅)。
 - **CSP 用雜湊而非 `unsafe-inline`**:伺服器在送出頁面時即時算 inline 區塊的 sha256,所以雜湊永遠不會跟內容脫節;注入進 DOM 的 `<script>` 對不上雜湊就不會執行。
 - **管理端 fail-closed**:沒設權杖就整組 503;權杖比對用 `hmac.compare_digest`。
+- **站在 CDN 後面的話,零外部請求會有一個缺口**:skill-tw.com 實測每個回應都帶 Cloudflare 的
+  `NEL` / `Report-To`,瀏覽器連線出錯時會主動把報告送到 `a.nel.cloudflare.com`。頁面本身沒有外連,
+  但那一段不在程式碼裡、也不在站方手上 —— 要真的零外部請求得去 CDN 關掉 NEL。
 - **程式碼本身零外部請求**:字型用系統內建,沒有 CDN、沒有 Google Fonts、沒有分析工具,整頁離線也能開。
   **但你放在前面的 CDN 可能自己塞東西** —— 實測 Cloudflare 的 Web Analytics 會把
   `beacon.min.js` 注入 HTML;我們的 CSP 把它擋掉了(console 會留下一則 blocked 訊息),

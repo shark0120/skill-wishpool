@@ -185,6 +185,8 @@ Cloudflare 上要檢查三個開關(Speed → Optimization / Analytics):
 | **Rocket Loader** | 會改寫 `<script>` → **雜湊必炸,整頁死** | **關掉** |
 | **Auto Minify(HTML)** | 會改寫 inline 區塊 → 雜湊必炸 | **關掉** |
 | **Web Analytics / Browser Insights** | 注入 `beacon.min.js` → 被 CSP 擋掉,每次載入留一則 console 錯誤,而且違反「零外部請求」 | **關掉**(想留就改用 `WISHPOOL_CSP=unsafe-inline`,但那等於放棄這道防線) |
+| **AI Crawl Control / Managed robots.txt** | **整份蓋掉你的 `public/robots.txt`**,注入 `Content-Signal: ai-train=no` 與九條 `Disallow`(ClaudeBot / GPTBot / CCBot / Google-Extended / Bytespider / Applebot-Extended / meta-externalagent…) | 看你要不要被 AI 抓。**要被抓就關掉** —— 不關的話你改 repo 裡那份是靜默無效的 |
+| **www 子網域** | DNS 有 `www` 但 nginx 沒有那個 `server_name` 的話,`www.你的網域` 會掉到同機的**別的站**(實測 skill-tw.com 就這樣,www 回的是另一個專案) | 加一條 301 到裸網域,或在 vhost 補 `server_name`。**不要讓兩個 host 都回 200** —— canonical 是跟著 Host 走的 |
 
 實測(skill-tw.com,2026-08-17):Web Analytics 是開著的,beacon 被 CSP 擋下:
 
