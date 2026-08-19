@@ -32,6 +32,10 @@
 <style>
 /* ══ 重置 ══════════════════════════════════════════════════════════════ */
 *{margin:0;padding:0;box-sizing:border-box}
+/* hidden 就是要看不見。沒有這一條的話,任何幫元素指定 display 的規則
+   (例如下面的 `button,.btn{display:inline-flex}`)都會把 hidden 蓋掉 ——
+   實際發生過:願望只有一則時,「載入更多」照樣顯示,按了什麼也不會發生。 */
+[hidden]{display:none!important}
 img,svg{max-width:100%}
 button,input,textarea{font:inherit;color:inherit}
 /* 流動字級:所有 rem 尺寸跟著視窗長大。下限鎖 16px,再小 iOS 會自己放大整頁。 */
@@ -284,7 +288,6 @@ a{color:var(--accent);text-underline-offset:.2em}
 /* 頂上一條三色細帶:一眼認出這塊是「本輪聯署」 */
 .round::before{content:'';position:absolute;inset:0 0 auto 0;height:3px;
   background:linear-gradient(90deg,var(--accent),var(--c-aurora) 55%,var(--c-flare))}
-.round[hidden]{display:none}
 .round-top{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
 .round-idx{font-weight:700;font-size:.95rem;color:var(--c-aurora)}
 .clock{font-variant-numeric:tabular-nums;font-weight:700;color:var(--c-aurora);
@@ -314,7 +317,6 @@ a{color:var(--accent);text-underline-offset:.2em}
 /* ══ 許願表單 ══════════════════════════════════════════════════════════ */
 .compose{background:var(--card);border:1px solid var(--rule);border-radius:.8rem;
          padding:1.1rem;margin:1rem 0 .4rem;box-shadow:var(--shadow)}
-.compose[hidden]{display:none}
 .field{margin:0 0 .9rem}
 .field label{display:block;font-size:.88rem;font-weight:600;margin:0 0 .3rem}
 .field .hint{font-size:.8rem;color:var(--faint);font-weight:400}
@@ -355,6 +357,32 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
                  background:var(--cb,var(--card));color:var(--cf,var(--ink))}
 .tags-bar button:hover{filter:brightness(.96)}
 .tags-bar button[aria-pressed=true]{box-shadow:inset 0 0 0 2px currentColor}
+
+/* ══ 這個池子怎麼運作 ══════════════════════════════════════════════════
+   四條規則,不是裝飾。用 dl 是因為它本來就是「詞條 + 解釋」;dt 靠左固定
+   寬度,窄螢幕(<26rem)改成上下堆疊,不然中文詞條會被擠成一字一行。     */
+.how{margin:1.4rem 0 0;padding:1.1rem 1rem;background:var(--card);
+     border:var(--hair) solid var(--rule);border-radius:.8rem;box-shadow:var(--shadow)}
+.how h2{font-size:.74rem;letter-spacing:.22em;text-transform:uppercase;
+        color:var(--c-aurora);font-weight:700}
+.how-list{margin:.5rem 0 0}
+.how-list > div{display:flex;gap:.8rem;align-items:baseline;padding:.5rem 0;
+                border-top:var(--hair) solid var(--rule)}
+.how-list > div:first-child{border-top:none;padding-top:.2rem}
+.how-list dt{flex:0 0 4.5rem;font-weight:700;font-size:.88rem;color:var(--ink)}
+.how-list dd{flex:1 1 auto;font-size:.9rem;color:var(--soft);line-height:1.75}
+.how-list dd b{color:var(--ink)}
+@media (max-width:26rem){
+  .how-list > div{display:block}
+  .how-list dt{margin:0 0 .15rem}
+}
+
+.gal-lead{font-size:.86rem;color:var(--soft);margin:.4rem 0 0;line-height:1.7}
+/* 許願表單裡的三句提示:用 span 各自成行,不做成清單 —— 它是一句話的補充,
+   不是四個並列的重點,做成 ul 會在螢幕閱讀器那邊多念一層「清單,3 個項目」。 */
+.compose-tips{font-size:.84rem;color:var(--faint);margin:0 0 .9rem;line-height:1.8}
+.compose-tips span{display:block}
+.compose-tips b{color:var(--soft)}
 
 /* ══ 願望卡 ════════════════════════════════════════════════════════════ */
 .list{list-style:none;margin:.6rem 0 0}
@@ -414,6 +442,9 @@ input:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:1px;bor
         border-radius:.55rem;padding:.75rem .9rem;margin:1rem 0;font-size:.9rem;
         color:var(--soft)}
 .notice b{color:var(--ink)}
+.list-end{text-align:center;color:var(--faint);font-size:.86rem;margin:.2rem 0 0;
+           display:flex;flex-wrap:wrap;gap:.2rem .6rem;align-items:center;
+           justify-content:center}
 .empty{text-align:center;padding:2.4rem 1rem;color:var(--faint)}
 .empty .i{color:var(--faint);margin-bottom:.5rem}
 .skeleton{height:5.6rem;background:var(--card);border:1px solid var(--rule);
@@ -644,6 +675,23 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     </div>
   </header>
 
+  <!-- 規則寫在頁面上,不是寫在 README 裡。第一次來的人只想知道四件事:
+       誰做、多久、要幾票、做不出來會怎樣 —— 講不清楚,願望就不會有人許。
+       每一條都要對得上程式碼(門檻是 pick_winner 只算別人的票、3 天是
+       cycle_days),寫不出證據的承諾一句都不要放。 -->
+  <section class="how" aria-labelledby="how-h">
+    <h2 id="how-h">這個池子怎麼運作</h2>
+    <dl class="how-list">
+      <div><dt>誰做</dt><dd>我做。出線的願望我親手做成 skill,放上 GitHub,免費、開源、
+        Claude Code 與 Codex 都能用 —— 下面「成品長這樣」那兩個就是這樣來的。</dd></div>
+      <div><dt>多久</dt><dd>每 3 天結算一次。倒數就在上面那一格,不是喊爽的。</dd></div>
+      <div><dt>要幾票</dt><dd>門檻只算<b>別人的票</b>。許願的人自動有一票,但那票不算數 ——
+        至少要有一個別人也說「我也要」,才有資格出線。</dd></div>
+      <div><dt>做不出來呢</dt><dd>就在那個願望底下寫清楚為什麼(狀態改成「暫不做」)。
+        不會裝作沒看見,也不會把做不到的東西說成做得到。</dd></div>
+    </dl>
+  </section>
+
   <!-- 手機是單純的直向流,桌機才會變成「釘住的側欄 + 主欄」。
        DOM 順序刻意維持成手機的閱讀順序,所以鍵盤與螢幕閱讀器的順序在兩邊都對。 -->
   <div class="shell">
@@ -657,6 +705,13 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     <svg class="i solid" aria-hidden="true"><use href="#i-drop"/></svg>我要許願</button>
 
   <form class="compose" id="compose" hidden novalidate>
+    <!-- 第一次許願的人卡的不是操作,是「我要許什麼、寫成什麼樣」。
+         三句話就好,寫在表單裡面(要用的時候才看得到),不占首屏。 -->
+    <p class="compose-tips">寫成這樣比較容易被做出來:
+      <span>① 講你現在<b>怎麼做這件事</b>,不是講你要什麼功能</span>
+      <span>② 講清楚<b>做完長什麼樣</b>(拿到一份表格?一句提醒?)</span>
+      <span>③ 一個願望只裝一件事,太大的拆成兩個</span>
+    </p>
     <div class="field">
       <label for="f-title">你想要什麼 skill?
         <span class="count" id="c-title">0/120</span></label>
@@ -710,6 +765,8 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
   <section class="gallery" aria-labelledby="gal-h">
     <div class="gallery-head">
       <p class="gallery-label" id="gal-h">成品長這樣</p>
+      <p class="gal-lead">這兩個不是示範,是每天在用的東西。池子裡出線的願望,
+        做出來也是放在同一個地方、同一種用法 —— 整包丟進資料夾就能用。</p>
       <a class="gallery-all" href="https://github.com/shark0120/skill-wishpool/tree/main/skills"
          target="_blank" rel="noopener noreferrer">全部成品<svg class="i" aria-hidden="true"><use href="#i-link"/></svg></a>
     </div>
@@ -761,6 +818,12 @@ input[type=text],textarea,.pool-wrap,#theme,.more{border-radius:var(--r)}
     <div class="tags-bar" id="tags-bar" role="group" aria-label="標籤篩選"></div>
   </section>
 
+  <noscript>
+    <div class="notice"><b>要有 JavaScript 才看得到池子裡的願望。</b>
+      這一頁沒有預先產生的內容 —— 願望是即時從這個站的 <code>/api/wishes</code> 讀的
+      (那支 API 不需要金鑰、也開放跨來源讀取)。不想開 JavaScript 的話,可以直接讀那支
+      API,或到 <a href="https://github.com/shark0120/skill-wishpool">GitHub</a> 開一張願望單。</div>
+  </noscript>
   <ul class="list" id="list" aria-live="polite" aria-busy="true">
     <li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>
   </ul>
@@ -1658,9 +1721,32 @@ function renderList(append) {
   }
   markLeader();
   attachExpanders();
-  $('load-more').hidden = state.wishes.length >= state.total;
+  const allShown = state.wishes.length >= state.total;
+  $('load-more').hidden = allShown;
+  renderListEnd(allShown);
   const hash = location.hash.match(/^#w(\d+)$/);
   if (hash && !append) flash(hash[1]);
+}
+
+/* 清單底部那一行。只在「已經全部顯示」而且真的有願望時出現 ——
+   池子還很空的時候,它比一顆按不動的按鈕有用:直接告訴你許了會排在哪。 */
+function renderListEnd(allShown) {
+  const old = $('list-end');
+  if (old) old.remove();
+  if (!allShown || !state.wishes.length) return;
+  const kids = [];
+  if (state.total <= 5 && !state.q && !state.tag) {
+    kids.push(document.createTextNode(
+      '池子裡目前只有 ' + state.total + ' 個願望 —— 你許的會直接排在最上面。'));
+    if (state.mode === 'live' && !state.readonly) {
+      const go = el('button', { class: 'more', type: 'button', text: '我也要許一個' });
+      go.addEventListener('click', openCompose);
+      kids.push(go);
+    }
+  } else {
+    kids.push(document.createTextNode('就這些了(共 ' + state.total + ' 個願望)。'));
+  }
+  $('list').after(el('p', { class: 'list-end', id: 'list-end' }, kids));
 }
 
 function filterStatic() {
